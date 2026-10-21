@@ -41,6 +41,7 @@ pub fn run() {
             ipc::set_tool_enabled,
             ipc::uninstall_tool,
             ipc::install_tool,
+            ipc::inspect_tool_zip,
             ipc::set_hotkey,
             ipc::reset_hotkey,
             ipc::save_config,

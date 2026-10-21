@@ -432,6 +432,33 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .modal h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .modal p { margin: 5px 0 0; color: var(--fg-dim); font-size: 12px; line-height: 1.6; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+/* Install review dialog: same backdrop, wider panel with permission rows. */
+.review-modal { width: min(560px, 100%); max-height: min(86vh, 760px); overflow-y: auto; }
+.review-head { display: flex; align-items: flex-start; gap: 12px; }
+.review-head .tool-icon { width: 44px; height: 44px; border-radius: 10px; }
+.review-title { flex: 1; min-width: 0; padding-top: 1px; }
+.review-title h2 { margin: 0; overflow: hidden; font-size: 15px; font-weight: 650; letter-spacing: .1px; text-overflow: ellipsis; white-space: nowrap; }
+.review-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 5px; color: var(--fg-faint); font-size: 11px; }
+.review-sub code { padding: 0 4px; border-radius: 3px; background: var(--bg3); color: var(--fg-faint); font-size: 10.5px; }
+.review-desc { margin: 12px 0 0; color: var(--fg-dim); font-size: 12px; line-height: 1.65; }
+.review-stats { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.review-stat { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border: 1px solid var(--line-soft); border-radius: 6px; background: var(--bg); color: var(--fg-dim); font-size: 11px; }
+.review-stat svg { color: var(--fg-faint); }
+.review-upgrade { display: flex; align-items: flex-start; gap: 8px; margin-top: 12px; padding: 9px 11px; border: 1px solid rgba(232, 178, 58, .3); border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 11.5px; line-height: 1.55; }
+.review-upgrade svg { flex: none; margin-top: 1px; }
+.review-section-title { display: flex; align-items: center; gap: 7px; margin: 16px 0 8px; color: var(--fg-dim); font-size: 12px; font-weight: 600; }
+.review-section-title svg { color: var(--fg-faint); }
+.review-section-title .hint { margin-left: auto; color: var(--fg-faint); font-size: 10.5px; font-weight: 400; }
+.perm-list { display: flex; flex-direction: column; gap: 6px; max-height: 262px; overflow-y: auto; padding-right: 2px; }
+.perm-row { display: flex; align-items: flex-start; gap: 9px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg); cursor: pointer; transition: border-color .15s, background .15s; }
+.perm-row:hover { border-color: var(--line); background: var(--bg3); }
+.perm-row input { width: 14px; height: 14px; flex: none; margin: 2px 0 0; accent-color: var(--accent); cursor: pointer; }
+.perm-copy { min-width: 0; }
+.perm-label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.perm-label code { padding: 0 4px; border-radius: 3px; background: var(--bg3); color: var(--fg-faint); font-size: 10px; }
+.perm-detail { display: block; margin-top: 2px; color: var(--fg-faint); font-size: 11px; line-height: 1.5; }
+.review-empty { padding: 14px; border: 1px dashed var(--line); border-radius: 8px; color: var(--fg-faint); font-size: 11.5px; text-align: center; }
+.review-note { margin-top: 12px; color: var(--fg-faint); font-size: 10.5px; line-height: 1.6; }
 /* --- 10. Narrow-window fallbacks -------------------------------------------- */
 @media (max-width: 860px) { .page { padding: 24px 22px 38px; } .hk-row { grid-template-columns: minmax(120px, 1fr) 145px minmax(130px, 1fr) 56px; gap: 8px; } }
 @media (max-width: 740px) {
@@ -588,6 +615,12 @@ const FALLBACK_TOOLS = [
 ].map(([id, name, description, version, author, source, enabled, accent, sizeBytes]) => ({
   id, name, description, version, author, source, enabled, accent, sizeBytes,
   iconDataUrl: null, dir: `D:\\Toolbox\\${source === 'official' ? 'tools' : 'data\\tools'}\\${id}`,
+  // The host DTO exposes effective permissions + a granted flag; mirror them so
+  // the tools tab renders the same for sample tools.
+  permissions: source === 'installed'
+    ? { filesOpen: true, filesSave: true, clipboardRead: false, clipboardWrite: true, data: true, externalOpen: false, network: [] }
+    : null,
+  granted: source === 'installed',
   actions: FALLBACK_ACTIONS.filter((action) => action.toolId === id)
     .map((action) => ({ id: action.id, title: action.title, combo: action.combo }))
 }));
@@ -619,9 +652,62 @@ function makeFallbackHost() {
   };
 
   const copy = (value) => JSON.parse(JSON.stringify(value));
-  let installs = 0;
+  let inspects = 0;
+  let pendingInspection = null;
   const findAction = (id) => db.actions.find((action) => action.id === id);
   const findTool = (id) => db.tools.find((tool) => tool.id === id);
+
+  // Same rows as install.rs, so the preview shows the real review dialog.
+  const PERMISSION_ROWS = [
+    ['files.open', '读取文件', () => '读取你选择的文件', (p) => p.filesOpen],
+    ['files.save', '保存文件', () => '弹出保存对话框并写入你选择的文件', (p) => p.filesSave],
+    ['clipboard.read', '读取剪贴板', () => '读取系统剪贴板内容', (p) => p.clipboardRead],
+    ['clipboard.write', '写入剪贴板', () => '写入系统剪贴板', (p) => p.clipboardWrite],
+    ['data', '本地数据', (p, id) => `在 data/tool-data/${id} 下保存私有数据`, (p) => p.data],
+    ['external.open', '外部链接', () => '用系统浏览器打开链接', (p) => p.externalOpen],
+    ['network', '网络访问', (p) => (p.network.length ? `访问指定网络域名：${p.network.join('、')}` : '访问指定网络域名'), (p) => p.network.length > 0]
+  ];
+  function permissionItems(permissions, id) {
+    return PERMISSION_ROWS.map(([key, label, detail, bit]) => ({
+      key, label, bit: Boolean(bit(permissions)), detail: detail(permissions, id)
+    }));
+  }
+  // One fake zip for every "install" click; the second review of the same id
+  // becomes an upgrade so the warning can be demoed without reinstalling.
+  function mockInspection() {
+    inspects += 1;
+    const id = 'local-demo-tool';
+    const existing = findTool(id);
+    const permissions = {
+      filesOpen: true, filesSave: true, clipboardRead: false, clipboardWrite: true,
+      data: true, externalOpen: true, network: ['api.example.com', 'cdn.example.com']
+    };
+    pendingInspection = {
+      ok: true, error: '',
+      inspectionId: `mock-inspection-${inspects}`,
+      zipPath: 'D:\\Downloads\\demo-tool-1.2.0.zip',
+      id, name: '演示工具', version: '1.2.0', author: '社区 · 示例作者',
+      description: '从本地 zip 安装的第三方工具示例：演示安装前的权限确认流程。',
+      entry: 'index.html', fileCount: 18, totalBytes: 482304, iconDataUrl: null,
+      isUpgrade: Boolean(existing),
+      existingSource: existing ? 'installed' : '',
+      permissions,
+      permissionItems: permissionItems(permissions, id)
+    };
+    return pendingInspection;
+  }
+  function grantFromKeys(permissions, granted) {
+    const keys = new Set(Array.isArray(granted) ? granted : Object.keys(granted || {}).filter((key) => granted[key]));
+    return {
+      filesOpen: keys.has('files.open') && Boolean(permissions.filesOpen),
+      filesSave: keys.has('files.save') && Boolean(permissions.filesSave),
+      clipboardRead: keys.has('clipboard.read') && Boolean(permissions.clipboardRead),
+      clipboardWrite: keys.has('clipboard.write') && Boolean(permissions.clipboardWrite),
+      data: keys.has('data') && Boolean(permissions.data),
+      externalOpen: keys.has('external.open') && Boolean(permissions.externalOpen),
+      network: keys.has('network') ? [...permissions.network] : []
+    };
+  }
 
   // Keep the tool card chips and the hotkey map in step with the action rows.
   function applyAction(action) {
@@ -657,20 +743,34 @@ function makeFallbackHost() {
         removed.forEach((id) => delete db.hotkeys[id]);
         return { ok: true };
       }
+      case 'inspect_tool_zip':
+        return mockInspection();
       case 'install_tool': {
-        installs += 1;
-        const id = `local-tool-${installs}`;
-        const actionId = `${id}.run`;
-        db.tools.push({
-          id, name: installs === 1 ? '我的本地工具' : `我的本地工具 ${installs}`,
-          description: '从本地 zip 安装的第三方工具示例。安装完成后会出现在「已安装」列表中。',
-          version: '0.1.0', author: '本地安装', source: 'installed', enabled: true,
-          accent: '#3ecf8e', iconDataUrl: null, dir: `${db.installedToolsDir}\\${id}`,
-          sizeBytes: 204800, actions: [{ id: actionId, title: '运行工具', combo: '' }]
-        });
-        db.actions.push({ id: actionId, scope: 'tool', toolId: id, title: '运行工具', combo: '', defaultCombo: '', effective: false, reason: '未设置' });
-        db.hotkeys[actionId] = { combo: '', defaultCombo: '', effective: false, reason: '未设置' };
-        return { ok: true, id };
+        const pending = pendingInspection;
+        if (!pending || (args.inspectionId && args.inspectionId !== pending.inspectionId)) {
+          pendingInspection = null;
+          return { ok: false, error: '安装会话已失效，请重新选择工具包' };
+        }
+        pendingInspection = null;
+        if (args.granted === null || args.granted === undefined) return { ok: false, error: 'cancelled' };
+        const permissions = grantFromKeys(pending.permissions, args.granted);
+        const existing = findTool(pending.id);
+        const actionId = `${pending.id}.run`;
+        const installed = {
+          id: pending.id, name: pending.name, description: pending.description,
+          version: pending.version, author: pending.author, source: 'installed',
+          enabled: true, accent: '#3ecf8e', iconDataUrl: pending.iconDataUrl || null,
+          dir: `${db.installedToolsDir}\\${pending.id}`, sizeBytes: pending.totalBytes,
+          permissions, granted: true,
+          actions: existing ? existing.actions : [{ id: actionId, title: '运行工具', combo: '' }]
+        };
+        if (existing) Object.assign(existing, installed);
+        else {
+          db.tools.push(installed);
+          db.actions.push({ id: actionId, scope: 'tool', toolId: pending.id, title: '运行工具', combo: '', defaultCombo: '', effective: false, reason: '未设置' });
+          db.hotkeys[actionId] = { combo: '', defaultCombo: '', effective: false, reason: '未设置' };
+        }
+        return { ok: true, id: pending.id, name: pending.name };
       }
       case 'set_hotkey': {
         const action = findAction(args.actionId);
@@ -857,6 +957,18 @@ function toolIcon(tool, small = false) {
   return `<div class="tool-icon${small ? ' sm' : ''}" style="background:${tint(accent, .14)};color:${accent};border:1px solid ${tint(accent, .3)}">${content}</div>`;
 }
 
+/**
+ * Number of capabilities in the effective permission set the host reported.
+ * Only reviewed (granted) installs show this in the card meta line.
+ */
+function permissionCount(tool) {
+  const permissions = tool && tool.permissions;
+  if (!permissions) return 0;
+  const bits = ['filesOpen', 'filesSave', 'clipboardRead', 'clipboardWrite', 'data', 'externalOpen']
+    .filter((key) => Boolean(permissions[key])).length;
+  return bits + (Array.isArray(permissions.network) && permissions.network.length ? 1 : 0);
+}
+
 function renderTools() {
   const data = state.data;
   const tools = data.tools;
@@ -954,6 +1066,7 @@ function renderToolCard(tool) {
           <span class="tool-author">${escapeHtml(tool.author)}</span>
           <span>·</span>
           <span>${formatBytes(tool.sizeBytes)}</span>
+          ${tool.granted ? `<span>·</span><span title="安装时由你逐项授权的权限数量">${permissionCount(tool)} 项权限</span>` : ''}
           ${tool.error ? `<span class="source-badge source-dev" title="${escapeAttr(tool.error)}">清单异常</span>` : ''}
         </div>
       </div>
@@ -1337,21 +1450,49 @@ async function openTool(id, button) {
   }
 }
 
+/**
+ * Two-phase third-party install.
+ *
+ * 1. `inspect_tool_zip` unpacks + validates the picked zip into a staging dir
+ *    and returns the review data; nothing is installed yet.
+ * 2. The user reviews the permissions in a dialog; only after confirming do we
+ *    call `install_tool` with the granted subset. Cancel tells the host to drop
+ *    the staged copy and leaves no tool installed.
+ */
 async function installTool(button) {
   if (state.installing) return;
   state.installing = true;
-  if (button) {
-    button.disabled = true;
-    const strong = button.querySelector('strong');
-    if (strong) strong.textContent = '正在安装…';
-  }
+  setInstallButtonBusy(button, '正在检查安装包…');
   try {
-    const result = await invoke('install_tool', {});
+    const inspection = await invoke('inspect_tool_zip');
+    if (!inspection || inspection.ok === false) {
+      if (inspection && inspection.error === 'cancelled') toast('已取消安装', 'info');
+      else toast(inspection && inspection.error ? `安装失败：${inspection.error}` : '安装失败', 'warn');
+      return;
+    }
+    // Explicit permission review; null means the user cancelled.
+    const granted = await reviewInstallDialog(inspection);
+    if (!granted) {
+      try {
+        await invoke('install_tool', { inspectionId: inspection.inspectionId, granted: null });
+      } catch (error) {
+        console.warn('[toolbox] discard pending install failed', error);
+      }
+      toast('已取消安装，未做任何更改', 'info');
+      return;
+    }
+    setInstallButtonBusy(button, '正在安装…');
+    const result = await invoke('install_tool', { inspectionId: inspection.inspectionId, granted });
     if (result && result.ok) {
-      toast(result.id ? `安装成功：${result.id}` : '工具已安装', 'ok');
+      // Clear the busy flag before refetching: `refresh` re-renders the dropzone
+      // and must not paint the "installing…" state.
+      state.installing = false;
+      toast(`安装成功：${result.name || result.id || '工具'}`, 'ok');
       await refresh({ silent: true });
-    } else if (result && result.error === 'cancelled') {
-      toast('已取消安装', 'info');
+      return;
+    }
+    if (result && result.error === 'cancelled') {
+      toast('已取消安装，未做任何更改', 'info');
     } else {
       toast(result && result.error ? `安装失败：${result.error}` : '安装失败', 'warn');
     }
@@ -1359,12 +1500,121 @@ async function installTool(button) {
     toast(`安装失败：${error && error.message ? error.message : error}`, 'danger');
   } finally {
     state.installing = false;
-    if (button && document.body.contains(button)) {
-      button.disabled = false;
-      const strong = button.querySelector('strong');
-      if (strong) strong.textContent = '从 zip 安装第三方工具…';
-    }
+    setInstallButtonBusy(button, null);
   }
+}
+
+function setInstallButtonBusy(button, label) {
+  if (!button) return;
+  if (label) {
+    button.disabled = true;
+    const strong = button.querySelector('strong');
+    if (strong) strong.textContent = label;
+    return;
+  }
+  if (!document.body.contains(button)) return;
+  button.disabled = false;
+  const strong = button.querySelector('strong');
+  if (strong) strong.textContent = '从 zip 安装第三方工具…';
+}
+
+/**
+ * Permission review dialog shown before a third-party tool is installed.
+ *
+ * Resolves to the list of granted permission keys when the user confirms, or
+ * `null` when the review is cancelled. Every declared permission is checked by
+ * default; the user can untick any of them and the tool then runs without it.
+ */
+function reviewInstallDialog(inspection) {
+  return new Promise((resolve) => {
+    const declared = (Array.isArray(inspection.permissionItems) ? inspection.permissionItems : [])
+      .filter((item) => item && item.bit);
+    const name = inspection.name || inspection.id || '未知工具';
+    const author = inspection.author || '未知作者';
+    const version = inspection.version || '0.0.0';
+    const domainHint = Array.isArray(inspection.permissions && inspection.permissions.network)
+      ? inspection.permissions.network
+      : [];
+    const fileCount = Number(inspection.fileCount) || 0;
+    const totalBytes = Number(inspection.totalBytes) || 0;
+
+    const rows = declared.length
+      ? declared.map((item) => `<label class="perm-row">
+          <input type="checkbox" data-perm-key="${escapeAttr(item.key)}" checked />
+          <span class="perm-copy">
+            <span class="perm-label">${escapeHtml(item.label || item.key)}<code>${escapeHtml(item.key)}</code></span>
+            <span class="perm-detail">${escapeHtml(item.detail || '')}</span>
+          </span>
+        </label>`).join('')
+      : '<div class="review-empty">该工具未申请任何额外权限</div>';
+
+    const upgrade = inspection.isUpgrade
+      ? `<div class="review-upgrade">${icon('alert', 15)}<span>「${escapeHtml(name)}」已安装，继续将覆盖当前版本，旧版本会自动备份到 data/backups/tools/。</span></div>`
+      : '';
+    const networkNote = domainHint.length
+      ? `<span class="review-stat">${icon('info', 12)}可访问域名：${escapeHtml(domainHint.join('、'))}</span>`
+      : '';
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `<div class="modal review-modal" role="dialog" aria-modal="true" aria-labelledby="review-title">
+      <div class="review-head">
+        ${toolIcon({ name, iconDataUrl: inspection.iconDataUrl, accent: '#4ea1ff' })}
+        <div class="review-title">
+          <h2 id="review-title">安装「${escapeHtml(name)}」</h2>
+          <div class="review-sub">
+            <span class="pill version-pill">v${escapeHtml(version)}</span>
+            <span>${escapeHtml(author)}</span>
+            <span>·</span>
+            <code title="工具 id">${escapeHtml(inspection.id || name)}</code>
+          </div>
+        </div>
+      </div>
+      <p class="review-desc">${escapeHtml(inspection.description || '该工具未提供描述。')}</p>
+      <div class="review-stats">
+        <span class="review-stat">${icon('folder', 12)}${fileCount} 个文件</span>
+        <span class="review-stat">${icon('download', 12)}解压后 ${formatBytes(totalBytes)}</span>
+        ${networkNote}
+      </div>
+      ${upgrade}
+      <div class="review-section-title">${icon('sliders', 13)}权限授权
+        <span class="hint">${declared.length ? `已声明 ${declared.length} 项，可取消勾选` : '无额外权限'}</span>
+      </div>
+      <div class="perm-list">${rows}</div>
+      <div class="review-note">只有勾选的权限会被授予该工具，未勾选的权限在运行时会被桥接层直接拒绝。请只安装来自可信来源的工具。</div>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-review-cancel>取消</button>
+        <button type="button" class="btn primary" data-review-ok>${icon('download', 13)}安装</button>
+      </div>
+    </div>`;
+
+    const previousFocus = document.activeElement;
+    const finish = (value) => {
+      document.removeEventListener('keydown', onKey, true);
+      backdrop.remove();
+      if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+      resolve(value);
+    };
+    const selected = () => [...backdrop.querySelectorAll('[data-perm-key]')]
+      .filter((box) => box.checked)
+      .map((box) => box.dataset.permKey);
+    const onKey = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        finish(null);
+      }
+    };
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) finish(null);
+      if (event.target.closest('[data-review-cancel]')) finish(null);
+      if (event.target.closest('[data-review-ok]')) finish(selected());
+    });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(backdrop);
+    const ok = backdrop.querySelector('[data-review-ok]');
+    if (ok) ok.focus();
+  });
 }
 
 async function revealPath(kind) {

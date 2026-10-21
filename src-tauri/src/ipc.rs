@@ -41,6 +41,11 @@ pub struct ToolDto {
     pub size_bytes: u64,
     pub error: String,
     pub actions: Vec<ActionDto>,
+    /// Permissions that actually apply to the tool (granted subset for
+    /// reviewed installs, manifest permissions otherwise).
+    pub permissions: registry::Permissions,
+    /// True when the user explicitly granted permissions at install time.
+    pub granted: bool,
 }
 
 #[derive(Serialize)]
@@ -76,6 +81,8 @@ fn build_state() -> AppStateDto {
         .into_iter()
         .map(|m| {
             let dir = std::path::PathBuf::from(&m.dir);
+            let granted = states.get(&m.id).and_then(|s| s.permissions.clone());
+            let permissions = registry::effective_permissions_with(&states, &m);
             let tool_actions = m
                 .actions
                 .iter()
@@ -102,6 +109,8 @@ fn build_state() -> AppStateDto {
                 source: m.source,
                 accent: m.accent,
                 dir: m.dir,
+                permissions,
+                granted: granted.is_some(),
             }
         })
         .collect();
@@ -167,8 +176,13 @@ pub fn uninstall_tool(window: WebviewWindow, id: String) -> Result<(), String> {
     Ok(())
 }
 
+/// First phase of installing a third-party tool.
+///
+/// Opens the zip picker, unpacks + validates the package into a staging dir and
+/// returns the review data. Installs nothing; the staged tree is remembered in
+/// a Rust static and consumed by [`install_tool`].
 #[tauri::command]
-pub fn install_tool(window: WebviewWindow) -> Result<Value, String> {
+pub fn inspect_tool_zip(window: WebviewWindow) -> Result<Value, String> {
     require_host(&window)?;
     use tauri_plugin_dialog::DialogExt;
     let app = window.app_handle().clone();
@@ -179,12 +193,38 @@ pub fn install_tool(window: WebviewWindow) -> Result<Value, String> {
         .blocking_pick_file()
         .and_then(|f| f.into_path().ok());
     let Some(zip) = picked else {
+        // The picker was cancelled: drop any older review so nothing leaks.
+        install::cancel_pending();
         return Ok(json!({ "ok": false, "error": "cancelled" }));
     };
-    match install::install_from_zip(&zip) {
+    match install::inspect_zip(&zip) {
+        Ok(inspection) => Ok(serde_json::to_value(inspection)
+            .unwrap_or_else(|_| json!({ "ok": false, "error": "检查结果序列化失败" }))),
+        Err(e) => Ok(json!({ "ok": false, "error": e })),
+    }
+}
+
+/// Second phase: install the reviewed package with the user's granted
+/// permission subset. `granted: null` means the user cancelled the review.
+#[tauri::command]
+pub fn install_tool(
+    window: WebviewWindow,
+    inspection_id: Option<String>,
+    granted: Option<Value>,
+) -> Result<Value, String> {
+    require_host(&window)?;
+    let app = window.app_handle().clone();
+    let Some(granted) = granted else {
+        install::cancel_pending();
+        return Ok(json!({ "ok": false, "error": "cancelled" }));
+    };
+    let Some(inspection_id) = inspection_id else {
+        return Ok(json!({ "ok": false, "error": "缺少安装会话标识，请重新选择工具包" }));
+    };
+    match install::install_pending(&inspection_id, &granted) {
         Ok(r) => {
             let _ = app.emit_all_hosts("tools-changed", json!({ "id": r.id }));
-            Ok(serde_json::to_value(r).unwrap_or(json!({ "ok": true })))
+            Ok(serde_json::to_value(r).unwrap_or_else(|_| json!({ "ok": true })))
         }
         Err(e) => Ok(json!({ "ok": false, "error": e })),
     }

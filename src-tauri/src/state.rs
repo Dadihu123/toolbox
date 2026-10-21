@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use crate::paths;
+use crate::registry::Permissions;
 
 pub const CONFIG_VERSION: u32 = 1;
 
@@ -61,6 +62,14 @@ pub struct ToolState {
     pub source: String,
     #[serde(default)]
     pub pinned: bool,
+    /// Permissions the user explicitly granted in the install review dialog.
+    ///
+    /// `None` means "never reviewed" (official / dev tools, or tools installed
+    /// by an older Toolbox build); those fall back to the manifest permissions.
+    /// Omitted from JSON when unset so existing tools.json files keep their
+    /// shape and older builds can still read the file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub permissions: Option<Permissions>,
 }
 
 fn read_json<T: for<'de> Deserialize<'de> + Default>(path: &Path) -> T {

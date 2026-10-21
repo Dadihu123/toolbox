@@ -18,7 +18,7 @@ pub struct WindowSpec {
     pub min_height: f64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Permissions {
     pub files_open: bool,
@@ -28,6 +28,39 @@ pub struct Permissions {
     pub data: bool,
     pub external_open: bool,
     pub network: Vec<String>,
+}
+
+impl Permissions {
+    /// The manifest is always the ceiling: a granted set can never hand a tool
+    /// a capability its own `tool.json` does not declare (tools.json can be
+    /// edited by hand, and an upgrade may shrink the manifest).
+    pub fn intersect(&self, declared: &Permissions) -> Permissions {
+        Permissions {
+            files_open: self.files_open && declared.files_open,
+            files_save: self.files_save && declared.files_save,
+            clipboard_read: self.clipboard_read && declared.clipboard_read,
+            clipboard_write: self.clipboard_write && declared.clipboard_write,
+            data: self.data && declared.data,
+            external_open: self.external_open && declared.external_open,
+            network: self
+                .network
+                .iter()
+                .filter(|domain| declared.network.contains(domain))
+                .cloned()
+                .collect(),
+        }
+    }
+
+    /// True when the set contains at least one capability.
+    pub fn any(&self) -> bool {
+        self.files_open
+            || self.files_save
+            || self.clipboard_read
+            || self.clipboard_write
+            || self.data
+            || self.external_open
+            || !self.network.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -204,6 +237,28 @@ pub fn is_enabled(states: &BTreeMap<String, ToolState>, id: &str) -> bool {
     states.get(id).map(|s| s.enabled).unwrap_or(true)
 }
 
+/// Permissions that actually apply to a tool.
+///
+/// Installed tools that went through the review dialog use the subset the user
+/// granted (clamped to the manifest). Official / dev tools and installs made by
+/// older builds have no stored grant and keep their manifest permissions.
+pub fn effective_permissions(m: &Manifest) -> Permissions {
+    effective_permissions_with(&state::load_tools(), m)
+}
+
+/// Same as [`effective_permissions`] but reuses an already loaded tools.json.
+pub fn effective_permissions_with(
+    states: &BTreeMap<String, ToolState>,
+    m: &Manifest,
+) -> Permissions {
+    if m.source == "installed" {
+        if let Some(granted) = states.get(&m.id).and_then(|s| s.permissions.as_ref()) {
+            return granted.intersect(&m.permissions);
+        }
+    }
+    m.permissions.clone()
+}
+
 pub fn icon_data_url(dir: &Path, icon: &str) -> Option<String> {
     if icon.trim().is_empty() {
         return None;
@@ -269,6 +324,7 @@ pub fn sync_states(states: &mut BTreeMap<String, ToolState>, tools: &[Manifest])
             installed_at: now_iso(),
             source: t.source.clone(),
             pinned: false,
+            permissions: None,
         });
         entry.source = t.source.clone();
     }
@@ -302,4 +358,114 @@ fn format_iso(secs: u64) -> String {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
     format!("{y:04}-{m:02}-{d:02}T{h:02}:{mi:02}:{s:02}Z")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn installed_manifest(id: &str, permissions: Permissions) -> Manifest {
+        Manifest {
+            id: id.into(),
+            name: "测试工具".into(),
+            source: "installed".into(),
+            permissions,
+            ..Default::default()
+        }
+    }
+
+    fn states_with(id: &str, granted: Option<Permissions>) -> BTreeMap<String, ToolState> {
+        let mut states = BTreeMap::new();
+        states.insert(
+            id.to_string(),
+            ToolState {
+                enabled: true,
+                source: "installed".into(),
+                permissions: granted,
+                ..Default::default()
+            },
+        );
+        states
+    }
+
+    #[test]
+    fn effective_permissions_use_the_granted_subset_for_installed_tools() {
+        let manifest = installed_manifest(
+            "demo",
+            Permissions {
+                files_open: true,
+                files_save: true,
+                clipboard_write: true,
+                network: vec!["api.example.com".into()],
+                ..Default::default()
+            },
+        );
+        let granted = Permissions {
+            files_open: true,
+            files_save: false,
+            // Not declared by the manifest: must stay off.
+            data: true,
+            network: vec!["api.example.com".into(), "evil.example.com".into()],
+            ..Default::default()
+        };
+        let states = states_with("demo", Some(granted));
+
+        let effective = effective_permissions_with(&states, &manifest);
+        assert!(effective.files_open, "checked permission is granted");
+        assert!(!effective.files_save, "unchecked permission stays off");
+        assert!(!effective.data, "manifest stays the ceiling");
+        assert_eq!(effective.network, ["api.example.com"]);
+    }
+
+    #[test]
+    fn effective_permissions_fall_back_to_the_manifest_without_a_grant() {
+        let manifest = installed_manifest(
+            "demo",
+            Permissions {
+                files_open: true,
+                data: true,
+                ..Default::default()
+            },
+        );
+
+        // Old install (no stored grant) keeps the declared permissions.
+        let states = states_with("demo", None);
+        assert_eq!(
+            effective_permissions_with(&states, &manifest),
+            manifest.permissions
+        );
+
+        // Official tools ignore any (hand edited) grant in tools.json.
+        let mut official = manifest.clone();
+        official.source = "official".into();
+        let states = states_with("demo", Some(Permissions::default()));
+        assert_eq!(
+            effective_permissions_with(&states, &official),
+            manifest.permissions
+        );
+    }
+
+    #[test]
+    fn permissions_intersect_keeps_only_declared_capabilities() {
+        let declared = Permissions {
+            files_open: true,
+            clipboard_read: true,
+            network: vec!["a.example.com".into()],
+            ..Default::default()
+        };
+        let granted = Permissions {
+            files_open: true,
+            files_save: true,
+            clipboard_read: true,
+            network: vec!["a.example.com".into(), "b.example.com".into()],
+            ..Default::default()
+        };
+        let effective = granted.intersect(&declared);
+        assert!(effective.files_open);
+        assert!(effective.clipboard_read);
+        assert!(!effective.files_save);
+        assert_eq!(effective.network, ["a.example.com"]);
+        assert!(granted.any());
+        assert!(!Permissions::default().any());
+    }
 }

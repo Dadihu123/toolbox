@@ -124,8 +124,18 @@ MOCK.hotkeys = Object.fromEntries(
   ])
 );
 
+// The host DTO now reports the effective permissions + a `granted` flag for
+// every tool; mirror that for the sample tools so the tools tab matches.
+for (const tool of MOCK.tools) {
+  tool.granted = tool.source === 'installed';
+  tool.permissions = tool.granted
+    ? { filesOpen: true, filesSave: true, clipboardRead: false, clipboardWrite: true, data: true, externalOpen: false, network: [] }
+    : null;
+}
+
 let mock = clone(MOCK);
-let mockInstallCount = 0;
+let mockInspectCount = 0;
+let mockPendingInspection = null;
 
 function findAction(actionId) {
   return mock.actions.find((action) => action.id === actionId) || null;
@@ -188,6 +198,121 @@ function resetMockHotkey(actionId) {
   return { ok: true };
 }
 
+/* ------------------------------------------------------------------------- */
+/* Mock install flow (inspect → permission review → install)                  */
+/* ------------------------------------------------------------------------- */
+
+// Mirrors install.rs `permission_items`, so the browser preview shows the same
+// Chinese labels/explanations as the real host.
+const MOCK_PERMISSION_ROWS = [
+  ['files.open', '读取文件', () => '读取你选择的文件', (permissions) => permissions.filesOpen],
+  ['files.save', '保存文件', () => '弹出保存对话框并写入你选择的文件', (permissions) => permissions.filesSave],
+  ['clipboard.read', '读取剪贴板', () => '读取系统剪贴板内容', (permissions) => permissions.clipboardRead],
+  ['clipboard.write', '写入剪贴板', () => '写入系统剪贴板', (permissions) => permissions.clipboardWrite],
+  ['data', '本地数据', (permissions, id) => `在 data/tool-data/${id} 下保存私有数据`, (permissions) => permissions.data],
+  ['external.open', '外部链接', () => '用系统浏览器打开链接', (permissions) => permissions.externalOpen],
+  ['network', '网络访问', (permissions) => (permissions.network.length ? `访问指定网络域名：${permissions.network.join('、')}` : '访问指定网络域名'), (permissions) => permissions.network.length > 0]
+];
+
+function mockPermissionItems(permissions, id) {
+  return MOCK_PERMISSION_ROWS.map(([key, label, detail, bit]) => ({
+    key,
+    label,
+    bit: Boolean(bit(permissions)),
+    detail: detail(permissions, id)
+  }));
+}
+
+// One fake zip per inspect call. Reviewing the same tool twice turns the second
+// review into an upgrade, so the warning banner is demoable.
+function mockInspection() {
+  mockInspectCount += 1;
+  const id = 'local-demo-tool';
+  const existing = mock.tools.find((tool) => tool.id === id);
+  const permissions = {
+    filesOpen: true,
+    filesSave: true,
+    clipboardRead: false,
+    clipboardWrite: true,
+    data: true,
+    externalOpen: true,
+    network: ['api.example.com', 'cdn.example.com']
+  };
+  mockPendingInspection = {
+    ok: true,
+    error: '',
+    inspectionId: `mock-inspection-${mockInspectCount}`,
+    zipPath: 'D:\\Downloads\\demo-tool-1.2.0.zip',
+    id,
+    name: '演示工具',
+    version: '1.2.0',
+    author: '社区 · 示例作者',
+    description: '从本地 zip 安装的第三方工具示例：演示安装前的权限确认流程。',
+    entry: 'index.html',
+    fileCount: 18,
+    totalBytes: 482304,
+    iconDataUrl: null,
+    isUpgrade: Boolean(existing),
+    existingSource: existing ? 'installed' : '',
+    permissions,
+    permissionItems: mockPermissionItems(permissions, id)
+  };
+  return mockPendingInspection;
+}
+
+function grantFromKeys(permissions, granted) {
+  const keys = new Set(
+    Array.isArray(granted) ? granted : Object.keys(granted || {}).filter((key) => granted[key])
+  );
+  return {
+    filesOpen: keys.has('files.open') && Boolean(permissions.filesOpen),
+    filesSave: keys.has('files.save') && Boolean(permissions.filesSave),
+    clipboardRead: keys.has('clipboard.read') && Boolean(permissions.clipboardRead),
+    clipboardWrite: keys.has('clipboard.write') && Boolean(permissions.clipboardWrite),
+    data: keys.has('data') && Boolean(permissions.data),
+    externalOpen: keys.has('external.open') && Boolean(permissions.externalOpen),
+    network: keys.has('network') ? [...permissions.network] : []
+  };
+}
+
+function mockInstallReviewed(args) {
+  const pending = mockPendingInspection;
+  if (!pending || (args.inspectionId && args.inspectionId !== pending.inspectionId)) {
+    mockPendingInspection = null;
+    return { ok: false, error: '安装会话已失效，请重新选择工具包' };
+  }
+  mockPendingInspection = null;
+  if (args.granted === null || args.granted === undefined) return { ok: false, error: 'cancelled' };
+
+  const permissions = grantFromKeys(pending.permissions, args.granted);
+  const existing = mock.tools.find((tool) => tool.id === pending.id);
+  const actionId = `${pending.id}.run`;
+  const installed = {
+    id: pending.id,
+    name: pending.name,
+    description: pending.description,
+    version: pending.version,
+    author: pending.author,
+    source: 'installed',
+    enabled: true,
+    accent: '#3ecf8e',
+    iconDataUrl: pending.iconDataUrl || null,
+    dir: `${mock.installedToolsDir}\\${pending.id}`,
+    sizeBytes: pending.totalBytes,
+    permissions,
+    granted: true,
+    actions: existing ? existing.actions : [{ id: actionId, title: '运行工具', combo: '' }]
+  };
+  if (existing) {
+    Object.assign(existing, installed);
+  } else {
+    mock.tools.push(installed);
+    mock.actions.push({ id: actionId, scope: 'tool', toolId: pending.id, title: '运行工具', combo: '', defaultCombo: '', effective: false, reason: '未设置' });
+    mock.hotkeys[actionId] = { combo: '', defaultCombo: '', effective: false, reason: '未设置' };
+  }
+  return { ok: true, id: pending.id, name: pending.name };
+}
+
 function mockInvoke(cmd, args = {}) {
   switch (cmd) {
     case 'get_state':
@@ -222,43 +347,11 @@ function mockInvoke(cmd, args = {}) {
       return { ok: true };
     }
 
-    case 'install_tool': {
-      mockInstallCount += 1;
-      const id = `local-tool-${mockInstallCount}`;
-      const actionId = `${id}.run`;
-      const name = mockInstallCount === 1 ? '我的本地工具' : `我的本地工具 ${mockInstallCount}`;
-      mock.tools.push({
-        id,
-        name,
-        description: '从本地 zip 安装的第三方工具示例。安装完成后会出现在「已安装」列表中。',
-        version: '0.1.0',
-        author: '本地安装',
-        source: 'installed',
-        enabled: true,
-        accent: '#3ecf8e',
-        iconDataUrl: null,
-        dir: `${mock.installedToolsDir}\\${id}`,
-        sizeBytes: 204800,
-        actions: [{ id: actionId, title: '运行工具', combo: '' }]
-      });
-      mock.actions.push({
-        id: actionId,
-        scope: 'tool',
-        toolId: id,
-        title: '运行工具',
-        combo: '',
-        defaultCombo: '',
-        effective: false,
-        reason: '未设置'
-      });
-      mock.hotkeys[actionId] = {
-        combo: '',
-        defaultCombo: '',
-        effective: false,
-        reason: '未设置'
-      };
-      return { ok: true, id };
-    }
+    case 'inspect_tool_zip':
+      return mockInspection();
+
+    case 'install_tool':
+      return mockInstallReviewed(args);
 
     case 'set_hotkey':
       return setMockHotkey(args.actionId, args.combo);
