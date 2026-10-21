@@ -190,14 +190,40 @@ fn apply_cli(app: &AppHandle, args: &[String], first_launch: bool) {
                 want_panel = false;
                 i += 1;
             }
-            _ => i += 1,
+            other => {
+                // Shell file association / drag onto the exe: bare file path.
+                if !other.starts_with('-') && std::path::Path::new(other).is_file() {
+                    files.push(other.to_string());
+                }
+                i += 1;
+            }
         }
     }
     if want_main {
         windows::main::open(app);
         return;
     }
-    if let Some(id) = tool {
+    // Without an explicit --tool, send the files to the first enabled tool that
+    // declares it accepts this type (falling back to the last used tool).
+    let mut target = tool;
+    if target.is_none() && !files.is_empty() {
+        target = windows::tools::tool_for_files(&files).or_else(|| {
+            let cfg = state::load_config();
+            if cfg.last_tool.is_empty() {
+                None
+            } else {
+                Some(cfg.last_tool)
+            }
+        });
+        if target.is_none() {
+            logging::write(
+                "warn",
+                "cli",
+                &format!("no tool accepts the passed file(s): {files:?}"),
+            );
+        }
+    }
+    if let Some(id) = target {
         if files.is_empty() {
             if let Err(e) = windows::tools::open(app, &id) {
                 logging::write("error", "cli", &format!("open tool {id} failed: {e}"));
@@ -205,7 +231,7 @@ fn apply_cli(app: &AppHandle, args: &[String], first_launch: bool) {
         } else {
             windows::tools::open_files(app, &id, files);
         }
-    } else if want_panel {
+    } else if want_panel || !files.is_empty() {
         // Defer by one tick: creating a webview window while the event loop is
         // still starting up on Windows is unreliable.
         let handle = app.clone();

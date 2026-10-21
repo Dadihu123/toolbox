@@ -130,9 +130,12 @@ fn mime_for(path: &Path) -> &'static str {
 // ----------------------------------------------------------------- shim
 
 /// Script injected before the tool's own scripts run.
-pub fn shim_script(manifest: &registry::Manifest) -> String {
+pub fn shim_script(
+    manifest: &registry::Manifest,
+    permissions: &registry::Permissions,
+) -> String {
     let tool_id = json!(manifest.id);
-    let perms = serde_json::to_string(&manifest.permissions).unwrap_or_else(|_| "{}".into());
+    let perms = serde_json::to_string(permissions).unwrap_or_else(|_| "{}".into());
     format!(
         r#"(function () {{
   if (window.__toolbox) return;
@@ -144,11 +147,6 @@ pub fn shim_script(manifest: &registry::Manifest) -> String {
     return window.__TAURI_INTERNALS__.invoke('bridge_call', {{
       toolId: TOOL_ID, method: method, args: args || null
     }});
-  }}
-
-  function onAction(cb) {{
-    if (!window.__TAURI_INTERNALS__ || !window.__TAURI_INTERNALS__.invoke) return function () {{}};
-    return function () {{}};
   }}
 
   window.__toolbox = {{
@@ -184,6 +182,34 @@ pub fn shim_script(manifest: &registry::Manifest) -> String {
         }};
       }}
     }},
+    actions: {{
+      // Register an action contributed by the running tool. Resolves to an
+      // unregister function. The hotkey only exists while this window is open.
+      register: function (opts) {{
+        opts = opts || {{}};
+        var localId = opts.id;
+        var handler = opts.handler;
+        var unlisten = function () {{}};
+        if (typeof handler === 'function') {{
+          unlisten = window.__toolbox.events.on('action', function (detail) {{
+            if (detail && detail.id === localId) {{
+              try {{ handler(detail); }} catch (e) {{ console.error(e); }}
+            }}
+          }});
+        }}
+        return call('actions.register', {{
+          id: localId,
+          title: opts.title || localId,
+          defaultHotkey: opts.defaultHotkey || ''
+        }}).then(function () {{
+          return function () {{
+            unlisten();
+            return call('actions.unregister', {{ id: localId }});
+          }};
+        }});
+      }},
+      unregister: function (id) {{ return call('actions.unregister', {{ id: id }}); }}
+    }},
     log: {{
       info: function (m, d) {{ return call('log', {{ level: 'info', message: m, data: d }}); }},
       error: function (m, d) {{ return call('log', {{ level: 'error', message: m, data: d }}); }}
@@ -196,13 +222,12 @@ pub fn shim_script(manifest: &registry::Manifest) -> String {
     }}
   }};
 
-  // host -> tool events (action dispatch, dropped files) arrive as DOM events
-  window.addEventListener('toolbox:action', function (e) {{
-    window.__toolbox._dispatch('action', e.detail);
-  }});
-  window.addEventListener('toolbox:files', function (e) {{
-    window.__toolbox._dispatch('files-dropped', e.detail);
-  }});
+  // Host -> tool events (action dispatch, dropped files). Tool windows carry no
+  // Tauri event permissions, so `webview.emit` never reaches them; the host eval's
+  // `window.__toolboxEmit(type, payload)` instead (see windows/tools.rs::deliver).
+  window.__toolboxEmit = function (type, payload) {{
+    window.__toolbox._dispatch(type, payload);
+  }};
 
   // tell the host we are alive so queued actions can be delivered
   document.addEventListener('DOMContentLoaded', function () {{
@@ -247,6 +272,10 @@ pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Resul
     if call.tool_id != manifest.id {
         return Err("工具身份不匹配".into());
     }
+    // Installed tools only get the permissions the user ticked in the review
+    // dialog (clamped to what tool.json declares); everything else uses the
+    // manifest as-is. See registry::effective_permissions.
+    let perms = crate::registry::effective_permissions(&manifest);
     let app: AppHandle = window.app_handle().clone();
 
     match call.method.as_str() {
@@ -255,7 +284,7 @@ pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Resul
             Ok(Value::Bool(true))
         }
         "files.open" => {
-            require(&manifest, |p| p.files_open, "files.open")?;
+            require(&perms, &manifest.id, |p| p.files_open, "files.open")?;
             let opts = call.args.unwrap_or(Value::Null);
             let multiple = opts
                 .get("multiple")
@@ -279,7 +308,7 @@ pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Resul
             Ok(serde_json::to_value(out).unwrap_or(Value::Array(vec![])))
         }
         "files.save" => {
-            require(&manifest, |p| p.files_save, "files.save")?;
+            require(&perms, &manifest.id, |p| p.files_save, "files.save")?;
             let args = call.args.unwrap_or(Value::Null);
             let name = args
                 .get("suggestedName")
@@ -303,7 +332,7 @@ pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Resul
             Ok(json!({ "ok": true, "path": path }))
         }
         "clipboard.writeText" => {
-            require(&manifest, |p| p.clipboard_write, "clipboard.write")?;
+            require(&perms, &manifest.id, |p| p.clipboard_write, "clipboard.write")?;
             let text = call
                 .args
                 .as_ref()
@@ -316,12 +345,12 @@ pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Resul
             Ok(Value::Bool(true))
         }
         "clipboard.readText" => {
-            require(&manifest, |p| p.clipboard_read, "clipboard.read")?;
+            require(&perms, &manifest.id, |p| p.clipboard_read, "clipboard.read")?;
             let t = app.clipboard().read_text().map_err(|e| e.to_string())?;
             Ok(json!(t))
         }
         "data.get" => {
-            require(&manifest, |p| p.data, "data")?;
+            require(&perms, &manifest.id, |p| p.data, "data")?;
             let key = call
                 .args
                 .as_ref()
@@ -332,7 +361,7 @@ pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Resul
             Ok(store.get(key).cloned().unwrap_or(Value::Null))
         }
         "data.set" => {
-            require(&manifest, |p| p.data, "data")?;
+            require(&perms, &manifest.id, |p| p.data, "data")?;
             let args = call.args.unwrap_or(Value::Null);
             let key = args
                 .get("key")
@@ -346,7 +375,7 @@ pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Resul
             Ok(Value::Bool(true))
         }
         "data.remove" => {
-            require(&manifest, |p| p.data, "data")?;
+            require(&perms, &manifest.id, |p| p.data, "data")?;
             let key = call
                 .args
                 .as_ref()
@@ -386,19 +415,50 @@ pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Resul
             crate::logging::tool_log(&manifest.id, level, msg);
             Ok(Value::Bool(true))
         }
+        "actions.register" => {
+            let args = call.args.unwrap_or(Value::Null);
+            let id = args.get("id").and_then(|v| v.as_str()).unwrap_or("");
+            let title = args.get("title").and_then(|v| v.as_str()).unwrap_or("");
+            let combo = args
+                .get("defaultHotkey")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let full = crate::actions::register_runtime(&manifest.id, id, title, combo)?;
+            crate::logging::write(
+                "info",
+                "actions",
+                &format!("runtime action registered: {full}"),
+            );
+            // The bridge runs on an async worker; rebuild hotkeys on the main thread.
+            crate::windows::panel::defer_main(&app, |h| crate::actions::apply_hotkeys(&h));
+            Ok(json!({ "id": id, "action": full }))
+        }
+        "actions.unregister" => {
+            let id = call
+                .args
+                .as_ref()
+                .and_then(|v| v.get("id"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let removed = crate::actions::unregister_runtime(&manifest.id, &id);
+            crate::windows::panel::defer_main(&app, |h| crate::actions::apply_hotkeys(&h));
+            Ok(json!({ "ok": removed }))
+        }
         other => Err(format!("未知的桥接方法：{other}")),
     }
 }
 
 fn require(
-    m: &registry::Manifest,
+    perms: &registry::Permissions,
+    tool_id: &str,
     check: impl Fn(&registry::Permissions) -> bool,
     name: &str,
 ) -> Result<(), String> {
-    if check(&m.permissions) {
+    if check(perms) {
         Ok(())
     } else {
-        Err(format!("工具「{}」未声明权限 {name}", m.id))
+        Err(format!("工具「{tool_id}」未声明权限 {name}"))
     }
 }
 
