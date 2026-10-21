@@ -342,10 +342,11 @@ pub fn close_window(window: WebviewWindow, label: String) -> Result<(), String> 
     require_host(&window)?;
     let app = window.app_handle().clone();
     if let Some(w) = app.get_webview_window(&label) {
-        // The panel is cheap to keep warm; the main window follows the
-        // "close to tray" preference; anything else is destroyed outright.
+        // The panel stays warm for a few minutes (panel::hide schedules its
+        // teardown); the main window follows the "close to tray" preference;
+        // anything else is destroyed outright.
         if label == windows::panel::LABEL {
-            let _ = w.hide();
+            windows::panel::hide(&app);
         } else if label == windows::main::LABEL && state::load_config().close_to_tray {
             let _ = w.hide();
         } else {

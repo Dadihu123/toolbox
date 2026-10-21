@@ -1,10 +1,66 @@
 //! The search panel: the main entry point, summoned with a hotkey.
 
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const LABEL: &str = "panel";
+
+/// How long a hidden panel stays warm before its webview is destroyed.
+///
+/// Chromium costs hundreds of MB once it exists; keeping the panel alive for a few
+/// minutes makes reopening instant, while the timeout gives the idle footprint
+/// back. `TOOLBOX_PANEL_WARM_SECS` overrides it for dev/e2e runs.
+fn warm_ttl() -> std::time::Duration {
+    let secs = std::env::var("TOOLBOX_PANEL_WARM_SECS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|v| *v > 0)
+        .unwrap_or(300);
+    std::time::Duration::from_secs(secs)
+}
+
+/// Bumped on every show/hide. A scheduled teardown only fires while its token is
+/// still current — that is how reopening the panel cancels the destroy task.
+static WARM_TOKEN: AtomicU64 = AtomicU64::new(0);
+
+fn cancel_warm_destroy() {
+    WARM_TOKEN.fetch_add(1, Ordering::SeqCst);
+}
+
+/// Hide the panel (keep it warm) and schedule its teardown after `warm_ttl()`.
+pub fn hide(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window(LABEL) {
+        let _ = win.hide();
+    }
+    crate::windows::ball::collapse();
+    schedule_destroy(app);
+}
+
+fn schedule_destroy(app: &AppHandle) {
+    let token = WARM_TOKEN.fetch_add(1, Ordering::SeqCst) + 1;
+    let ttl = warm_ttl();
+    let handle = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(ttl);
+        if WARM_TOKEN.load(Ordering::SeqCst) != token {
+            return;
+        }
+        defer_main(&handle, move |h| {
+            if WARM_TOKEN.load(Ordering::SeqCst) != token {
+                return;
+            }
+            if let Some(win) = h.get_webview_window(LABEL) {
+                if win.is_visible().unwrap_or(false) {
+                    return;
+                }
+                let _ = win.destroy();
+                crate::logging::write("info", "panel", "warm window released after idle timeout");
+            }
+        });
+    });
+}
 
 /// Injected into every host window: a tiny event bus that the Rust side
 /// dispatches into with `webview.eval`. Avoids depending on the event plugin
@@ -48,10 +104,10 @@ pub fn toggle(app: &AppHandle) {
     crate::logging::write("info", "panel", "toggle requested");
     if let Some(win) = app.get_webview_window(LABEL) {
         if win.is_visible().unwrap_or(false) {
-            let _ = win.hide();
-            crate::windows::ball::collapse();
+            hide(app);
             return;
         }
+        cancel_warm_destroy();
         let _ = win.show();
         let _ = win.set_focus();
         crate::windows::ball::expand();
@@ -94,6 +150,7 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
 
     let _ = win.show();
     let _ = win.set_focus();
+    cancel_warm_destroy();
     Ok(())
 }
 

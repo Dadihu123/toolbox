@@ -89,7 +89,7 @@ pub fn run() {
                 let label = window.label().to_string();
                 if label == windows::panel::LABEL {
                     api.prevent_close();
-                    let _ = window.hide();
+                    windows::panel::hide(&app_handle());
                 } else if label == windows::main::LABEL {
                     let cfg = state::load_config();
                     if cfg.close_to_tray {
