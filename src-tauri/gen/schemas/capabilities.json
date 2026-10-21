@@ -1,0 +1,1 @@
+{"host-windows":{"identifier":"host-windows","description":"Capability for the toolbox host windows (ball, panel, main).","local":true,"windows":["ball","panel","main"],"permissions":["core:default"]}}

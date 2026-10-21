@@ -1,0 +1,1796 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>工具箱 · Toolbox</title>
+<style>
+/* --- 1. Tokens & reset ------------------------------------------------------ */
+:root {
+  --bg: #14161a;
+  --bg2: #1b1e24;
+  --bg3: #22262e;
+  --line: #323844;
+  --line-soft: #272c36;
+  --fg: #dfe3ea;
+  --fg-dim: #98a1b0;
+  --fg-faint: #6b7484;
+  --accent: #4ea1ff;
+  --accent-dim: #2b6cb0;
+  --ok: #3ecf8e;
+  --warn: #e8b23a;
+  --danger: #e5484d;
+  --accent-soft: rgba(78, 161, 255, .12);
+  --ok-soft: rgba(62, 207, 142, .12);
+  --warn-soft: rgba(232, 178, 58, .12);
+  --danger-soft: rgba(229, 72, 77, .11);
+  --mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; overflow: hidden; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { border: 0; padding: 0; background: none; }
+button:not(:disabled) { cursor: pointer; }
+a { color: var(--accent); text-decoration: none; cursor: pointer; }
+code, kbd { font-family: var(--mono); }
+::selection { background: rgba(78, 161, 255, .28); }
+:focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #303540; border: 3px solid var(--bg); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #3c4350; }
+/* --- 2. App shell, custom titlebar ------------------------------------------ */
+.app { height: 100vh; display: flex; flex-direction: column; min-width: 0; }
+.titlebar { height: 40px; flex: 0 0 40px; display: flex; align-items: center; justify-content: space-between; background: var(--bg2); border-bottom: 1px solid var(--line-soft); user-select: none; }
+.titlebar-brand { display: flex; align-items: center; gap: 9px; height: 100%; padding-left: 14px; }
+.titlebar-logo { display: grid; place-items: center; color: var(--accent); }
+.titlebar-name { font-size: 12.5px; font-weight: 600; letter-spacing: .2px; }
+.titlebar-sub { margin-left: 2px; padding-left: 9px; border-left: 1px solid var(--line); color: var(--fg-faint); font-size: 11px; }
+.win-controls { display: flex; height: 100%; }
+.win-btn { width: 46px; height: 100%; display: grid; place-items: center; color: var(--fg-dim); transition: background .15s, color .15s; }
+.win-btn:hover { background: var(--bg3); color: var(--fg); }
+.win-btn.win-close:hover { background: var(--danger); color: #fff; }
+.win-btn:focus-visible { outline-offset: -2px; }
+.shell { flex: 1; min-height: 0; display: flex; }
+/* --- 3. Sidebar ------------------------------------------------------------- */
+.sidebar { width: 200px; flex: 0 0 200px; min-height: 0; display: flex; flex-direction: column; background: var(--bg2); border-right: 1px solid var(--line-soft); }
+.brand { display: flex; align-items: center; gap: 10px; padding: 18px 16px 15px; }
+.brand-mark {
+  width: 34px;
+  height: 34px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  color: #fff;
+  background: linear-gradient(145deg, var(--accent), var(--accent-dim));
+  box-shadow: 0 5px 16px rgba(78, 161, 255, .18);
+}
+.brand-copy { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.brand-copy strong { font-size: 13.5px; font-weight: 600; letter-spacing: .3px; }
+.brand-copy span { color: var(--fg-faint); font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; }
+.nav { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; overflow-y: auto; }
+.nav-item { position: relative; width: 100%; height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: 8px; color: var(--fg-dim); text-align: left; transition: background .15s, color .15s; }
+.nav-item:hover { background: var(--bg3); color: var(--fg); }
+.nav-item.active { background: var(--bg3); color: var(--fg); }
+.nav-item.active::before { content: ""; position: absolute; left: -8px; top: 9px; bottom: 9px; width: 2px; border-radius: 0 2px 2px 0; background: var(--accent); }
+.nav-item svg { flex: none; opacity: .92; }
+.nav-label { flex: 1; }
+.nav-count { min-width: 20px; padding: 0 6px; border: 1px solid var(--line-soft); border-radius: 999px; background: var(--bg); color: var(--fg-faint); font-size: 10.5px; line-height: 17px; text-align: center; }
+.side-foot { margin-top: auto; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line-soft); color: var(--fg-faint); font-size: 11px; }
+.side-version { font-family: var(--mono); letter-spacing: .2px; }
+/* --- 4. Content, page headers, shared pieces -------------------------------- */
+.content { flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; background: radial-gradient(900px 460px at 78% -12%, rgba(78, 161, 255, .07), transparent 65%), var(--bg); }
+.page { max-width: 1140px; margin: 0 auto; padding: 28px 32px 44px; min-height: 100%; }
+.page-enter { animation: page-in .18s ease-out both; }
+@keyframes page-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+.page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+.page-head h1 { margin: 0 0 6px; font-size: 22px; line-height: 1.2; font-weight: 650; letter-spacing: .2px; }
+.page-head p { margin: 0; color: var(--fg-dim); font-size: 12.5px; }
+.head-actions { display: flex; align-items: center; gap: 8px; padding-top: 2px; }
+.page-badge { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; border: 1px solid var(--line-soft); border-radius: 6px; background: var(--bg2); color: var(--fg-faint); font-size: 11px; white-space: nowrap; }
+.page-badge .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.section { margin-top: 26px; }
+.section.first { margin-top: 0; }
+.section-head { display: flex; align-items: center; gap: 9px; min-height: 24px; margin-bottom: 11px; }
+.section-head h2 { margin: 0; font-size: 13.5px; font-weight: 600; letter-spacing: .2px; }
+.section-hint { margin-left: auto; color: var(--fg-faint); font-size: 11.5px; }
+.count { min-width: 20px; padding: 0 6px; border: 1px solid var(--line-soft); border-radius: 999px; background: var(--bg2); color: var(--fg-faint); font-size: 10.5px; line-height: 17px; text-align: center; }
+/* Buttons ----------------------------------------------------------------- */
+.btn {
+  height: 30px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg3);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+  transition: background .15s, border-color .15s, color .15s, transform .08s;
+}
+.btn:hover:not(:disabled) { background: var(--line-soft); border-color: var(--fg-faint); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: .42; cursor: not-allowed; }
+.btn.primary { border-color: var(--accent); background: var(--accent); color: #0b111a; font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: #65aeff; border-color: #65aeff; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--fg-dim); }
+.btn.ghost:hover:not(:disabled) { background: var(--bg3); border-color: var(--line-soft); color: var(--fg); }
+.btn.danger { border-color: rgba(229, 72, 77, .34); background: var(--danger-soft); color: var(--danger); }
+.btn.danger:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: #fff; }
+.btn.sm { height: 26px; padding: 0 9px; border-radius: 6px; font-size: 11.5px; }
+.icon-btn { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; color: var(--fg-dim); transition: background .15s, border-color .15s, color .15s; }
+.icon-btn:hover { background: var(--bg3); border-color: var(--line-soft); color: var(--fg); }
+.link-btn { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-size: 11.5px; transition: color .15s; }
+.link-btn:hover { color: #7dbaff; text-decoration: underline; text-underline-offset: 2px; }
+.link-btn:disabled { color: var(--fg-faint); cursor: not-allowed; text-decoration: none; }
+/* Badges & pills ---------------------------------------------------------- */
+.pill, .source-badge, .badge { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border: 1px solid var(--line-soft); border-radius: 5px; font-size: 10.5px; line-height: 1; white-space: nowrap; }
+.version-pill { font-family: var(--mono); color: var(--fg-faint); background: var(--bg3); border-color: var(--line-soft); }
+.source-official { color: var(--accent); background: var(--accent-soft); border-color: rgba(78, 161, 255, .28); }
+.source-installed { color: var(--fg-dim); background: var(--bg3); border-color: var(--line-soft); }
+.source-dev { color: var(--warn); background: var(--warn-soft); border-color: rgba(232, 178, 58, .28); }
+.badge-ok { color: var(--ok); background: var(--ok-soft); border-color: rgba(62, 207, 142, .26); }
+.badge-warn { color: var(--warn); background: var(--warn-soft); border-color: rgba(232, 178, 58, .26); }
+/* kbd --------------------------------------------------------------------- */
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--bg3);
+  color: var(--fg-dim);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: nowrap;
+}
+/* --- 5. Tools tab ----------------------------------------------------------- */
+.tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.tool-card { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg2); transition: border-color .18s, transform .18s, box-shadow .18s; }
+.tool-card:hover { border-color: var(--line); transform: translateY(-1px); box-shadow: 0 10px 30px rgba(0, 0, 0, .18); }
+.tool-card.is-disabled { opacity: .72; }
+.tool-top { display: flex; align-items: flex-start; gap: 11px; min-width: 0; }
+.tool-icon { width: 48px; height: 48px; flex: none; display: grid; place-items: center; border-radius: 11px; overflow: hidden; font-size: 18px; font-weight: 650; }
+.tool-icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tool-icon.sm { width: 34px; height: 34px; border-radius: 9px; font-size: 13px; }
+.tool-title { flex: 1; min-width: 0; padding-top: 1px; }
+.tool-name-row { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.tool-name-row h3 { margin: 0; overflow: hidden; color: var(--fg); font-size: 14px; font-weight: 600; letter-spacing: .1px; text-overflow: ellipsis; white-space: nowrap; }
+.tool-meta { display: flex; align-items: center; gap: 7px; margin-top: 6px; min-width: 0; color: var(--fg-faint); font-size: 10.5px; }
+.tool-author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-desc { display: -webkit-box; min-height: 39px; margin: 0; overflow: hidden; color: var(--fg-dim); font-size: 12.5px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.action-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 23px; }
+.action-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 7px; border: 1px solid var(--line-soft); border-radius: 6px; background: var(--bg3); color: var(--fg-dim); font-size: 11px; }
+.chip-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip-empty { color: var(--fg-faint); font-size: 11px; }
+.card-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: auto; padding-top: 11px; border-top: 1px solid var(--line-soft); }
+.foot-right { display: flex; align-items: center; gap: 4px; }
+.tool-state { display: inline-flex; align-items: center; gap: 5px; color: var(--fg-faint); font-size: 10.5px; }
+.tool-state i { width: 5px; height: 5px; border-radius: 50%; background: var(--fg-faint); }
+.tool-state.on { color: var(--ok); }
+.tool-state.on i { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.tool-state.off { color: var(--fg-faint); }
+/* Market ------------------------------------------------------------------ */
+.market-card { padding: 18px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg2); }
+.market-intro { display: flex; align-items: flex-start; gap: 12px; }
+.market-icon { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border: 1px solid rgba(78, 161, 255, .24); border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.market-intro h3 { margin: 0 0 3px; font-size: 13.5px; font-weight: 600; }
+.market-intro p { margin: 0; color: var(--fg-dim); font-size: 12px; }
+.market-intro code { padding: 1px 4px; border-radius: 3px; background: var(--bg3); color: var(--fg-dim); font-size: 11px; }
+.official-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: 8px; margin-top: 15px; }
+.official-item { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px 10px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg3); transition: border-color .15s, background .15s; }
+.official-item:hover { border-color: var(--line); background: var(--line-soft); }
+.official-info { flex: 1; min-width: 0; }
+.official-name { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.official-sub { overflow: hidden; margin-top: 1px; color: var(--fg-faint); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.dropzone {
+  width: 100%;
+  margin-top: 15px;
+  padding: 21px 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  border: 1.5px dashed var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--fg-dim);
+  text-align: center;
+  transition: border-color .18s, background .18s, color .18s;
+}
+.dropzone:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); color: var(--fg); }
+.dropzone:disabled { opacity: .55; cursor: wait; }
+.dropzone svg { color: var(--accent); margin-bottom: 2px; }
+.dropzone strong { font-size: 12.5px; font-weight: 600; }
+.dropzone span { color: var(--fg-faint); font-size: 11px; }
+.path-line { display: flex; align-items: center; gap: 8px; margin-top: 14px; min-width: 0; color: var(--fg-faint); font-size: 11px; }
+.path-line code { min-width: 0; overflow: hidden; color: var(--fg-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.path-line .link-btn { margin-left: auto; flex: none; }
+/* --- 6. Hotkeys tab --------------------------------------------------------- */
+.hk-section { margin-top: 24px; }
+.hk-section:first-of-type { margin-top: 0; }
+.hk-group-head { display: flex; align-items: center; gap: 9px; margin: 0 0 9px; }
+.hk-group-head h2 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.hk-group-head .source-badge { height: 18px; }
+.hk-table { overflow: hidden; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg2); }
+.hk-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 170px minmax(190px, 230px) 62px;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  transition: background .15s;
+}
+.hk-row:last-child { border-bottom: 0; }
+.hk-row:not(.hk-head):hover { background: rgba(255, 255, 255, .018); }
+.hk-row.is-recording { background: var(--accent-soft); }
+.hk-head { min-height: 34px; padding-top: 0; padding-bottom: 0; background: var(--bg3); color: var(--fg-faint); font-size: 10.5px; letter-spacing: .4px; }
+.hk-name { overflow: hidden; color: var(--fg-dim); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
+.hk-combo-wrap { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.kbd-btn {
+  height: 28px;
+  min-width: 64px;
+  max-width: 100%;
+  padding: 0 9px;
+  overflow: hidden;
+  border-color: var(--line);
+  background: var(--bg3);
+  color: var(--fg);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.kbd-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.kbd-btn.empty { color: var(--fg-faint); border-style: dashed; }
+.kbd-btn.recording { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); animation: record-pulse 1.4s ease-in-out infinite; }
+@keyframes record-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(78, 161, 255, .2); } 50% { box-shadow: 0 0 0 3px rgba(78, 161, 255, .08); } }
+.record-hint { color: var(--accent); font-size: 10px; white-space: nowrap; }
+.hk-status-wrap { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.hk-status { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--fg-dim); font-size: 11.5px; }
+.hk-status .dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--fg-faint); }
+.hk-status.ok { color: var(--ok); }
+.hk-status.ok .dot { background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+.hk-status.warn { color: var(--warn); }
+.hk-status.warn .dot { background: var(--warn); box-shadow: 0 0 0 3px var(--warn-soft); }
+.hk-status.unset { color: var(--fg-faint); }
+.hk-reason { overflow: hidden; color: var(--warn); opacity: .82; text-overflow: ellipsis; white-space: nowrap; }
+.hk-error { max-width: 100%; overflow: hidden; color: var(--danger); font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.hk-action { display: flex; justify-content: flex-end; }
+.hk-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 20px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--bg2);
+  color: var(--fg-faint);
+  font-size: 11.5px;
+  line-height: 1.6;
+}
+.hk-note svg { flex: none; margin-top: 1px; color: var(--warn); }
+/* --- 7. Settings tab -------------------------------------------------------- */
+.settings-stack { display: flex; flex-direction: column; gap: 14px; }
+.settings-card { overflow: hidden; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg2); }
+.settings-head { padding: 14px 18px 12px; border-bottom: 1px solid var(--line-soft); }
+.settings-head h2 { margin: 0; font-size: 13.5px; font-weight: 600; }
+.settings-head p { margin: 3px 0 0; color: var(--fg-faint); font-size: 11.5px; }
+.setting-row { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 55px; padding: 13px 18px; border-bottom: 1px solid var(--line-soft); }
+.setting-row:last-child { border-bottom: 0; }
+.setting-label { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.setting-label > span { font-size: 12.5px; }
+.setting-label small { color: var(--fg-faint); font-size: 11px; }
+.setting-control { display: flex; align-items: center; gap: 9px; flex: none; }
+.setting-control.wide { flex: 1; justify-content: flex-end; min-width: 0; }
+.soon { color: var(--fg-faint); font-size: 10.5px; white-space: nowrap; }
+.seg { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg); }
+.seg-item { height: 26px; padding: 0 10px; border-radius: 6px; color: var(--fg-dim); font-size: 11.5px; white-space: nowrap; transition: background .15s, color .15s; }
+.seg-item:hover:not(:disabled) { background: var(--bg3); color: var(--fg); }
+.seg-item.active { background: var(--accent-soft); color: var(--accent); }
+.seg-item:disabled { cursor: not-allowed; opacity: .65; }
+.switch { position: relative; width: 38px; height: 22px; flex: none; border: 1px solid var(--line); border-radius: 999px; background: var(--line-soft); transition: background .18s, border-color .18s; }
+.switch .switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--fg-faint); transition: left .18s, background .18s; }
+.switch:hover { border-color: var(--fg-faint); }
+.switch.on { border-color: var(--accent); background: var(--accent-dim); }
+.switch.on .switch-thumb { left: 18px; background: #fff; }
+.range-wrap { display: flex; align-items: center; gap: 10px; }
+input[type="range"] { width: 190px; height: 20px; margin: 0; appearance: none; background: transparent; cursor: pointer; }
+input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--accent) var(--fill, 42%), var(--line) var(--fill, 42%)); }
+input[type="range"]::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -5px; appearance: none; border: 2px solid var(--bg2); border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+input[type="range"]:focus-visible { outline: none; }
+input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent-soft), 0 0 0 1px var(--accent); }
+.range-out { min-width: 38px; color: var(--fg-dim); font-family: var(--mono); font-size: 11px; text-align: right; }
+.path-box { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg); }
+.path-box code { flex: 1; min-width: 0; overflow: hidden; color: var(--fg-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.path-box .btn { flex: none; }
+.data-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.danger-zone { border-color: rgba(229, 72, 77, .26); }
+.danger-zone .settings-head { border-bottom-color: rgba(229, 72, 77, .18); }
+.danger-zone .settings-head h2 { color: var(--danger); }
+.danger-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px; }
+.settings-foot { margin-top: 4px; color: var(--fg-faint); font-size: 11px; }
+/* --- 8. About tab ----------------------------------------------------------- */
+.about-wrap { max-width: 660px; margin: 22px auto 0; }
+.about-card {
+  position: relative;
+  overflow: hidden;
+  padding: 38px 36px 28px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background:
+  radial-gradient(420px 220px at 50% -30%, rgba(78, 161, 255, .15), transparent 70%),
+  var(--bg2);
+  text-align: center;
+}
+.about-logo {
+  width: 72px;
+  height: 72px;
+  margin: 0 auto 16px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(78, 161, 255, .28);
+  border-radius: 20px;
+  color: #fff;
+  background: linear-gradient(145deg, var(--accent), var(--accent-dim));
+  box-shadow: 0 14px 34px rgba(78, 161, 255, .2);
+}
+.about-card h1 { margin: 0; font-size: 23px; font-weight: 650; letter-spacing: .4px; }
+.about-en { margin-left: 7px; color: var(--fg-faint); font-size: 13px; font-weight: 400; letter-spacing: 1px; }
+.about-version { display: inline-flex; margin-top: 7px; }
+.about-desc { max-width: 470px; margin: 18px auto 0; color: var(--fg-dim); font-size: 12.5px; line-height: 1.75; }
+.tech-line { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 18px; color: var(--fg-faint); font-size: 11px; }
+.tech-line b { color: var(--fg-dim); font-weight: 500; }
+.tech-dot { color: var(--line); }
+.about-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 24px;
+  padding: 11px 13px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg-dim);
+  font-size: 11.5px;
+  line-height: 1.65;
+  text-align: left;
+}
+.about-note svg { flex: none; margin-top: 1px; color: var(--accent); }
+.about-foot { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line-soft); color: var(--fg-faint); font-size: 10.5px; }
+.about-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; text-align: left; }
+.about-meta div { padding: 9px 11px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg); }
+.about-meta span { display: block; color: var(--fg-faint); font-size: 10px; }
+.about-meta strong { display: block; margin-top: 2px; overflow: hidden; color: var(--fg-dim); font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+/* --- 9. Empty / loading / error states, toasts, context menu ---------------- */
+.empty-state { padding: 44px 24px; border: 1px dashed var(--line); border-radius: 12px; background: rgba(27, 30, 36, .5); text-align: center; }
+.empty-ico { width: 42px; height: 42px; margin: 0 auto 11px; display: grid; place-items: center; border: 1px solid var(--line-soft); border-radius: 11px; background: var(--bg2); color: var(--fg-faint); }
+.empty-state h3 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+.empty-state p { margin: 0; color: var(--fg-faint); font-size: 11.5px; }
+.loading, .error-state { min-height: 420px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; color: var(--fg-faint); font-size: 12px; }
+.spinner { width: 26px; height: 26px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-state { text-align: center; }
+.error-state .empty-ico { color: var(--danger); border-color: rgba(229, 72, 77, .3); background: var(--danger-soft); }
+.error-state h2 { margin: 0; color: var(--fg); font-size: 15px; }
+.error-state p { max-width: 460px; margin: 0; color: var(--fg-dim); font-size: 12px; }
+.error-state code { max-width: 560px; overflow-wrap: anywhere; color: var(--fg-faint); font-size: 11px; }
+.toasts { position: fixed; right: 18px; bottom: 18px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; width: min(340px, calc(100vw - 36px)); pointer-events: none; }
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg3);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .38);
+  color: var(--fg);
+  font-size: 12px;
+  line-height: 1.45;
+  pointer-events: auto;
+  animation: toast-in .18s ease-out both;
+}
+.toast.ok { border-left-color: var(--ok); }
+.toast.warn { border-left-color: var(--warn); }
+.toast.danger { border-left-color: var(--danger); }
+.toast.info { border-left-color: var(--accent); }
+.toast-ico { flex: none; margin-top: 1px; color: var(--accent); }
+.toast.ok .toast-ico { color: var(--ok); }
+.toast.warn .toast-ico { color: var(--warn); }
+.toast.danger .toast-ico { color: var(--danger); }
+.toast.out { animation: toast-out .2s ease-in both; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes toast-out { to { opacity: 0; transform: translateY(6px) scale(.98); } }
+.ctx-menu { position: fixed; z-index: 900; min-width: 182px; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg3); box-shadow: 0 16px 40px rgba(0, 0, 0, .46); animation: menu-in .12s ease-out both; }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.ctx-item { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; color: var(--fg-dim); font-size: 12px; text-align: left; transition: background .12s, color .12s; }
+.ctx-item:hover { background: var(--line-soft); color: var(--fg); }
+.ctx-item.danger { color: var(--danger); }
+.ctx-item.danger:hover { background: var(--danger-soft); color: var(--danger); }
+.ctx-sep { height: 1px; margin: 4px 2px; background: var(--line); }
+/* In-app confirm dialog (window.confirm blocks the WebView message loop). */
+.modal-backdrop { position: fixed; inset: 0; z-index: 950; display: grid; place-items: center; padding: 24px; background: rgba(8, 10, 14, .62); animation: fade-in .14s ease-out both; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.modal { width: min(400px, 100%); padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg2); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); animation: menu-in .16s ease-out both; }
+.modal-head { display: flex; align-items: flex-start; gap: 11px; }
+.modal-ico { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--bg3); color: var(--warn); }
+.modal-ico.danger { border-color: rgba(229, 72, 77, .3); background: var(--danger-soft); color: var(--danger); }
+.modal h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.modal p { margin: 5px 0 0; color: var(--fg-dim); font-size: 12px; line-height: 1.6; }
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+/* --- 10. Narrow-window fallbacks -------------------------------------------- */
+@media (max-width: 860px) { .page { padding: 24px 22px 38px; } .hk-row { grid-template-columns: minmax(120px, 1fr) 145px minmax(130px, 1fr) 56px; gap: 8px; } }
+@media (max-width: 740px) {
+  .sidebar { width: 64px; flex-basis: 64px; }
+  .brand { justify-content: center; padding: 16px 0 12px; }
+  .brand-copy, .nav-label, .nav-count, .side-version, .side-foot .badge { display: none; }
+  .nav { padding: 6px; }
+  .nav-item { justify-content: center; padding: 0; }
+  .nav-item.active::before { left: -6px; }
+  .side-foot { justify-content: center; padding: 12px 0; }
+  .side-foot::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 3px var(--ok-soft); }
+  .hk-row { grid-template-columns: minmax(110px, 1fr) 130px 1fr 52px; padding: 8px 10px; }
+  .hk-head { padding: 0 10px; }
+  .hk-reason { display: none; }
+  .about-meta { grid-template-columns: 1fr; }
+}
+@media (max-width: 620px) {
+  .setting-row { align-items: flex-start; flex-direction: column; gap: 9px; }
+  .setting-control { width: 100%; }
+  .range-wrap { width: 100%; }
+  input[type="range"] { flex: 1; width: auto; }
+  .hk-row { grid-template-columns: 1fr 130px; }
+  .hk-row .hk-status-wrap, .hk-row .hk-action { display: none; }
+  .hk-head span:nth-child(3), .hk-head span:nth-child(4) { display: none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Custom titlebar: the whole bar is a drag region, controls opt out. -->
+  <!-- `-webkit-app-region` is kept for Electron-style shells; Tauri 2 uses data-tauri-drag-region. -->
+  <header class="titlebar" style="-webkit-app-region: drag" data-tauri-drag-region>
+    <div class="titlebar-brand" data-tauri-drag-region>
+      <span class="titlebar-logo" data-tauri-drag-region>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.5 12 3l7 4.5v9L12 21l-7-4.5z"/><path d="m5 7.5 7 4.5 7-4.5M12 12v9"/></svg>
+      </span>
+      <span class="titlebar-name" data-tauri-drag-region>Toolbox</span>
+      <span class="titlebar-sub" data-tauri-drag-region>工具箱</span>
+    </div>
+    <div class="win-controls">
+      <button type="button" class="win-btn" id="win-min" style="-webkit-app-region: no-drag" aria-label="最小化" title="最小化">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+      </button>
+      <button type="button" class="win-btn win-close" id="win-close" style="-webkit-app-region: no-drag" aria-label="关闭" title="关闭">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.5 12 3l7 4.5v9L12 21l-7-4.5z"/><path d="m5 7.5 7 4.5 7-4.5M12 12v9"/></svg>
+        </div>
+        <div class="brand-copy">
+          <strong>工具箱</strong>
+          <span>Toolbox</span>
+        </div>
+      </div>
+      <nav class="nav" id="nav" aria-label="主导航"></nav>
+      <div class="side-foot" id="side-foot"></div>
+    </aside>
+    <main class="content" id="view" tabindex="-1">
+      <div class="loading"><div class="spinner"></div><span>正在加载工具箱…</span></div>
+    </main>
+  </div>
+</div>
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<script type="module">
+/* --- 1. Helpers ------------------------------------------------------------- */
+const $ = (selector, root = document) => root.querySelector(selector);
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const escapeHtml = (value) =>
+  String(value == null ? '' : value).replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  })[char]);
+
+const escapeAttr = (value) => escapeHtml(value).replace(/`/g, '&#96;');
+
+function tint(hex, alpha) {
+  const raw = String(hex || '').replace('#', '');
+  const full = raw.length === 3 ? raw.split('').map((part) => part + part).join('') : raw;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return `rgba(78, 161, 255, ${alpha})`;
+  const number = parseInt(full, 16);
+  return `rgba(${(number >> 16) & 255}, ${(number >> 8) & 255}, ${number & 255}, ${alpha})`;
+}
+
+function formatBytes(bytes) {
+  const value = Number(bytes);
+  if (!Number.isFinite(value) || value <= 0) return '—';
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(1)} MB`;
+}
+
+const ICONS = {
+  logo: '<path d="M5 7.5 12 3l7 4.5v9L12 21l-7-4.5z"/><path d="m5 7.5 7 4.5 7-4.5M12 12v9"/>',
+  grid: '<rect x="3" y="3" width="7" height="7" rx="1.6"/><rect x="14" y="3" width="7" height="7" rx="1.6"/><rect x="3" y="14" width="7" height="7" rx="1.6"/><rect x="14" y="14" width="7" height="7" rx="1.6"/>',
+  keyboard: '<rect x="2.5" y="5.5" width="19" height="13" rx="2"/><path d="M6 9h.01M9.5 9h.01M13 9h.01M16.5 9h.01M6 12.5h.01M9.5 12.5h.01M13 12.5h.01M16.5 12.5h.01M8 16h8"/>',
+  sliders: '<path d="M4 7h8"/><path d="M17 7h3"/><circle cx="15" cy="7" r="2"/><path d="M4 17h3"/><path d="M12 17h8"/><circle cx="9" cy="17" r="2"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/>',
+  play: '<path d="M8 5.5v13l10-6.5z"/>',
+  folder: '<path d="M3.5 7.5a2 2 0 0 1 2-2h4l2 2h7a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z"/>',
+  more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  check: '<path d="m5 12 4.5 4.5L19 7"/>',
+  trash: '<path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6.5 7l.8 12a1 1 0 0 0 1 1h7.4a1 1 0 0 0 1-1l.8-12"/><path d="M10 11v5M14 11v5"/>',
+  power: '<path d="M12 3v9"/><path d="M6.3 6.3a8 8 0 1 0 11.4 0"/>',
+  copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5v-3a2 2 0 0 0-2-2h-8a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3"/>',
+  upload: '<path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/>',
+  alert: '<path d="M10.3 4.3 2.8 17a1.6 1.6 0 0 0 1.4 2.4h15.6a1.6 1.6 0 0 0 1.4-2.4L13.7 4.3a1.9 1.9 0 0 0-3.4 0z"/><path d="M12 9v4"/><path d="M12 16.5h.01"/>',
+  restart: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/>',
+  pause: '<path d="M9 6v12M15 6v12"/>',
+  download: '<path d="M12 4v12"/><path d="m7 11 5 5 5-5"/><path d="M4 19h16"/>',
+  log: '<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M9 12h6M9 16h6"/>',
+  dot: '<circle cx="12" cy="12" r="3"/>'
+};
+
+function icon(name, size = 16) {
+  return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ICONS.dot}</svg>`;
+}
+
+/* =========================================================================
+   2. Local fallback host (used when file:// blocks the shared ES module)
+   -------------------------------------------------------------------------
+   `ui/shared/host.js` is the real bridge. Chromium refuses cross-origin module
+   imports from `file://`, so when the page is opened by double-click the module
+   import fails and this in-page clone of the mock backend takes over. Keep it in
+   sync with host.js when the mock data changes.
+   ========================================================================= */
+/* --- 2. Local fallback host (file:// preview) ------------------------------- */
+const FALLBACK_ACTIONS = [
+  ['app.panel', 'app', null, '呼出 / 隐藏面板', 'Alt+Space', 'Alt+Space', true, null],
+  ['app.main', 'app', null, '打开主窗口', 'Ctrl+Alt+T', 'Ctrl+Alt+T', false, '与 Windows Terminal 的快捷键冲突'],
+  ['app.pin', 'app', null, '固定 / 取消固定面板', 'Alt+P', 'Alt+P', true, null],
+  ['app.quit', 'app', null, '退出工具箱', '', 'Ctrl+Alt+Q', false, '未设置'],
+  ['sprite-align.toggle', 'tool', 'sprite-align', '显示 / 隐藏面板', 'Ctrl+Alt+1', 'Ctrl+Alt+1', true, null],
+  ['sprite-align.export', 'tool', 'sprite-align', '导出当前对齐', 'Ctrl+Alt+E', 'Ctrl+Alt+E', true, null],
+  ['batch-rename.run', 'tool', 'batch-rename', '执行上次重命名规则', 'Ctrl+Alt+R', 'Ctrl+Alt+R', true, null],
+  ['color-picker.pick', 'tool', 'color-picker', '开始屏幕取色', '', 'Ctrl+Shift+C', false, '未设置'],
+  ['gif-split.open', 'tool', 'gif-split', '打开拆帧面板', 'Ctrl+Alt+G', 'Ctrl+Alt+G', false, '被其它程序占用']
+].map(([id, scope, toolId, title, combo, defaultCombo, effective, reason]) =>
+  ({ id, scope, toolId, title, combo, defaultCombo, effective, reason }));
+
+const FALLBACK_TOOLS = [
+  ['sprite-align', '序列帧对齐', '导入精灵表，按行列切片并叠加参考线；支持逐帧微调、批量偏移与对齐结果导出。', '1.2.0', 'Toolbox 官方', 'official', true, '#4ea1ff', 2411724],
+  ['batch-rename', '批量重命名', '基于规则批量重命名文件，支持序号、日期变量与正则替换，执行前可预览结果。', '0.9.3', '社区 · 林深', 'installed', true, '#3ecf8e', 482304],
+  ['color-picker', '取色器', '屏幕放大镜取色，自动复制 HEX / RGB，支持历史色板与多显示器。', '1.0.0', '社区 · 阿澈', 'installed', false, '#e8b23a', 318464],
+  ['gif-split', 'GIF 拆帧', '将 GIF 动图拆分为 PNG 序列，可指定帧区间、输出尺寸与命名规则。', '1.1.0', 'Toolbox 官方', 'official', true, '#b084ff', 1269760]
+].map(([id, name, description, version, author, source, enabled, accent, sizeBytes]) => ({
+  id, name, description, version, author, source, enabled, accent, sizeBytes,
+  iconDataUrl: null, dir: `D:\\Toolbox\\${source === 'official' ? 'tools' : 'data\\tools'}\\${id}`,
+  actions: FALLBACK_ACTIONS.filter((action) => action.toolId === id)
+    .map((action) => ({ id: action.id, title: action.title, combo: action.combo }))
+}));
+
+const FALLBACK_LOGS = [
+  '[10:42:18] INFO  toolbox: host started, version 0.1.0',
+  '[10:42:18] INFO  store: config loaded from data/config.json',
+  '[10:42:18] INFO  tools: loaded 2 official tool(s)',
+  '[10:42:18] INFO  tools: loaded 2 installed tool(s)',
+  '[10:42:19] WARN  hotkeys: Ctrl+Alt+T is already taken by another process',
+  '[10:42:20] INFO  ball: created at right side, y=62%',
+  '[10:42:20] INFO  main: window ready (1000x700)'
+];
+
+function makeFallbackHost() {
+  const db = {
+    version: '0.1.0',
+    portable: true,
+    dataDir: 'D:\\Toolbox\\data',
+    officialToolsDir: 'D:\\Toolbox\\tools',
+    installedToolsDir: 'D:\\Toolbox\\data\\tools',
+    config: {
+      locale: 'zh-CN', theme: 'dark', ballSide: 'right', ballY: 0.62,
+      panelHotkey: 'Alt+Space', autostart: false, closeToTray: true
+    },
+    tools: FALLBACK_TOOLS.map((tool) => ({ ...tool, actions: tool.actions.map((a) => ({ ...a })) })),
+    actions: FALLBACK_ACTIONS.map((action) => ({ ...action })),
+    hotkeys: {}
+  };
+
+  const copy = (value) => JSON.parse(JSON.stringify(value));
+  let installs = 0;
+  const findAction = (id) => db.actions.find((action) => action.id === id);
+  const findTool = (id) => db.tools.find((tool) => tool.id === id);
+
+  // Keep the tool card chips and the hotkey map in step with the action rows.
+  function applyAction(action) {
+    db.hotkeys[action.id] = {
+      combo: action.combo, defaultCombo: action.defaultCombo,
+      effective: action.effective, reason: action.reason
+    };
+    if (action.scope !== 'tool') return;
+    const entry = findTool(action.toolId)?.actions.find((item) => item.id === action.id);
+    if (entry) entry.combo = action.combo;
+  }
+
+  async function invoke(cmd, args = {}) {
+    await sleep(65);
+    switch (cmd) {
+      case 'get_state': return copy(db);
+      case 'open_tool': case 'close_tool': case 'open_panel': case 'open_main':
+      case 'close_window': case 'quit_app': case 'restart_app': return { ok: true };
+
+      case 'set_tool_enabled': {
+        const tool = findTool(args.id);
+        if (!tool) return { ok: false, error: '工具不存在' };
+        tool.enabled = Boolean(args.enabled);
+        return { ok: true };
+      }
+      case 'uninstall_tool': {
+        const tool = findTool(args.id);
+        if (!tool) return { ok: false, error: '工具不存在' };
+        if (tool.source === 'official') return { ok: false, error: '官方工具不可卸载' };
+        db.tools = db.tools.filter((item) => item.id !== args.id);
+        const removed = db.actions.filter((action) => action.toolId === args.id).map((action) => action.id);
+        db.actions = db.actions.filter((action) => action.toolId !== args.id);
+        removed.forEach((id) => delete db.hotkeys[id]);
+        return { ok: true };
+      }
+      case 'install_tool': {
+        installs += 1;
+        const id = `local-tool-${installs}`;
+        const actionId = `${id}.run`;
+        db.tools.push({
+          id, name: installs === 1 ? '我的本地工具' : `我的本地工具 ${installs}`,
+          description: '从本地 zip 安装的第三方工具示例。安装完成后会出现在「已安装」列表中。',
+          version: '0.1.0', author: '本地安装', source: 'installed', enabled: true,
+          accent: '#3ecf8e', iconDataUrl: null, dir: `${db.installedToolsDir}\\${id}`,
+          sizeBytes: 204800, actions: [{ id: actionId, title: '运行工具', combo: '' }]
+        });
+        db.actions.push({ id: actionId, scope: 'tool', toolId: id, title: '运行工具', combo: '', defaultCombo: '', effective: false, reason: '未设置' });
+        db.hotkeys[actionId] = { combo: '', defaultCombo: '', effective: false, reason: '未设置' };
+        return { ok: true, id };
+      }
+      case 'set_hotkey': {
+        const action = findAction(args.actionId);
+        if (!action) return { ok: false, reason: '快捷键项不存在' };
+        const combo = String(args.combo || '').trim();
+        if (!combo) return { ok: false, reason: '组合键不能为空' };
+        const conflict = db.actions.find((item) => item.id !== action.id && item.combo && item.combo.toLowerCase() === combo.toLowerCase());
+        if (conflict) return { ok: false, reason: `与「${conflict.title}」冲突` };
+        action.combo = combo; action.effective = true; action.reason = null;
+        applyAction(action);
+        return { ok: true };
+      }
+      case 'reset_hotkey': {
+        const action = findAction(args.actionId);
+        if (!action) return { ok: false, reason: '快捷键项不存在' };
+        const conflict = db.actions.find((item) => item.id !== action.id && item.combo && action.defaultCombo && item.combo.toLowerCase() === action.defaultCombo.toLowerCase());
+        action.combo = action.defaultCombo;
+        action.effective = !conflict && Boolean(action.combo);
+        action.reason = conflict ? `与「${conflict.title}」冲突` : action.combo ? null : '未设置';
+        applyAction(action);
+        return { ok: true };
+      }
+      case 'save_config':
+        db.config = { ...db.config, ...(args.patch || {}) };
+        return { ok: true };
+      case 'reveal_path': {
+        const paths = {
+          data: db.dataDir, officialTools: db.officialToolsDir,
+          installedTools: db.installedToolsDir, logs: `${db.dataDir}\\logs`
+        };
+        return { ok: true, path: paths[args.kind] || db.dataDir };
+      }
+      case 'get_log_tail':
+        return { lines: FALLBACK_LOGS.slice(-Math.max(1, Number(args.lines) || 20)) };
+      default: return { ok: true };
+    }
+  }
+
+  return {
+    isHosted: false,
+    invoke,
+    listen: previewListen,
+    minimizeWindow: async () => ({ ok: true, mock: true })
+  };
+}
+
+// Preview mode keeps the same event surface as the real bridge so the page can
+// be poked from the console with `__hostEmit('config-changed', {})`.
+const previewListeners = new Map();
+function previewListen(event, cb) {
+  if (!previewListeners.has(event)) previewListeners.set(event, new Set());
+  previewListeners.get(event).add(cb);
+  if (typeof window.__hostEmit !== 'function') {
+    window.__hostEmit = (name, payload) => {
+      const handlers = previewListeners.get(name);
+      if (handlers) handlers.forEach((handler) => handler(payload));
+    };
+  }
+  return () => {
+    const handlers = previewListeners.get(event);
+    if (handlers) handlers.delete(cb);
+  };
+}
+
+async function loadHost() {
+  try {
+    const module = await import('./shared/host.js');
+    if (module && typeof module.invoke === 'function') return module;
+    throw new Error('host bridge has no invoke export');
+  } catch (error) {
+    console.info('[toolbox] browser preview mode:', error && error.message ? error.message : error);
+    return makeFallbackHost();
+  }
+}
+
+/* --- 3. App state & constants ----------------------------------------------- */
+const NAV_ITEMS = [
+  { id: 'tools', label: '工具', icon: 'grid' },
+  { id: 'hotkeys', label: '快捷键', icon: 'keyboard' },
+  { id: 'settings', label: '设置', icon: 'sliders' },
+  { id: 'about', label: '关于', icon: 'info' }
+];
+const SOURCE_LABELS = { official: '官方', installed: '第三方', dev: '开发中' };
+const SOURCE_CLASSES = { official: 'source-official', installed: 'source-installed', dev: 'source-dev' };
+const MODIFIER_KEYS = new Set(['Control', 'Alt', 'Shift', 'Meta', 'OS', 'AltGraph']);
+const KEY_NAMES = {
+  Space: 'Space', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Insert: 'Insert', Home: 'Home', End: 'End',
+  PageUp: 'PageUp', PageDown: 'PageDown', ArrowUp: 'Up', ArrowDown: 'Down', ArrowLeft: 'Left', ArrowRight: 'Right',
+  Minus: '-', Equal: '=', BracketLeft: '[', BracketRight: ']', Backslash: '\\', Semicolon: ';', Quote: "'",
+  Comma: ',', Period: '.', Slash: '/', Backquote: '`', NumpadAdd: 'Num+', NumpadSubtract: 'Num-',
+  NumpadMultiply: 'Num*', NumpadDivide: 'Num/', NumpadEnter: 'Enter'
+};
+
+const state = {
+  data: null, loading: true, error: null, tab: 'tools', recording: null, recordedCombo: null,
+  hotkeyError: null, installing: false, committing: false, saving: false
+};
+
+let host = null;
+let invoke = async () => { throw new Error('宿主尚未就绪'); };
+let listen = () => () => {};
+let menuEl = null;
+let menuToolId = null;
+
+/* --- 4. Rendering: sidebar / shell / toasts --------------------------------- */
+function renderSidebar() {
+  const data = state.data;
+  const nav = $('#nav');
+  nav.innerHTML = NAV_ITEMS.map((item) => {
+    const active = state.tab === item.id;
+    const count = item.id === 'tools' && data ? `<span class="nav-count">${data.tools.length}</span>` : '';
+    return `<button type="button" class="nav-item${active ? ' active' : ''}" data-tab="${item.id}"${active ? ' aria-current="page"' : ''} title="${item.label}">
+      ${icon(item.icon, 16)}<span class="nav-label">${item.label}</span>${count}
+    </button>`;
+  }).join('');
+
+  const foot = $('#side-foot');
+  if (!data) {
+    foot.innerHTML = '<span class="side-version">v—</span><span class="badge">加载中</span>';
+    return;
+  }
+  foot.innerHTML = `<span class="side-version">v${escapeHtml(data.version)}</span>
+    <span class="badge ${data.portable ? 'badge-ok' : 'badge-warn'}" title="${data.portable ? '配置与数据保存在程序目录' : '数据保存在系统用户目录'}">${data.portable ? '便携模式' : '非便携'}</span>`;
+}
+
+function render({ preserveScroll = false, animate = false } = {}) {
+  const view = $('#view');
+  const scrollTop = view.scrollTop;
+  renderSidebar();
+
+  if (state.loading) {
+    view.innerHTML = '<div class="loading"><div class="spinner"></div><span>正在加载工具箱…</span></div>';
+    return;
+  }
+  if (state.error) {
+    view.innerHTML = `<div class="error-state">
+      <div class="empty-ico">${icon('alert', 20)}</div>
+      <h2>加载失败</h2>
+      <p>无法读取工具箱状态，请重试或检查宿主是否正在运行。</p>
+      <code>${escapeHtml(state.error)}</code>
+      <button type="button" class="btn" data-retry>${icon('refresh', 14)}重新加载</button>
+    </div>`;
+    return;
+  }
+
+  const pages = {
+    tools: renderTools,
+    hotkeys: renderHotkeys,
+    settings: renderSettings,
+    about: renderAbout
+  };
+  view.innerHTML = (pages[state.tab] || renderTools)();
+  if (animate) {
+    const page = $('.page', view);
+    if (page) page.classList.add('page-enter');
+  }
+  if (preserveScroll) view.scrollTop = scrollTop;
+}
+
+function toast(message, type = 'info') {
+  const root = $('#toasts');
+  if (!root) return;
+  const iconName = type === 'ok' ? 'check' : type === 'warn' ? 'alert' : type === 'danger' ? 'x' : 'info';
+  const node = document.createElement('div');
+  node.className = `toast ${type}`;
+  node.innerHTML = `<span class="toast-ico">${icon(iconName, 15)}</span><span>${escapeHtml(message)}</span>`;
+  root.appendChild(node);
+  setTimeout(() => {
+    node.classList.add('out');
+    setTimeout(() => node.remove(), 220);
+  }, 3000);
+}
+
+/* --- 5. Page: tools --------------------------------------------------------- */
+function accentOf(tool) {
+  return /^#[0-9a-f]{6}$/i.test(tool.accent || '') ? tool.accent : '#4ea1ff';
+}
+
+function toolIcon(tool, small = false) {
+  const accent = accentOf(tool);
+  const content = tool.iconDataUrl
+    ? `<img src="${escapeAttr(tool.iconDataUrl)}" alt="" />`
+    : `<span>${escapeHtml(String(tool.name || '?').trim().charAt(0))}</span>`;
+  return `<div class="tool-icon${small ? ' sm' : ''}" style="background:${tint(accent, .14)};color:${accent};border:1px solid ${tint(accent, .3)}">${content}</div>`;
+}
+
+function renderTools() {
+  const data = state.data;
+  const tools = data.tools;
+  const official = tools.filter((tool) => tool.source === 'official');
+  const cards = tools.length
+    ? tools.map(renderToolCard).join('')
+    : `<div class="empty-state">
+        <div class="empty-ico">${icon('grid', 20)}</div>
+        <h3>还没有安装工具</h3>
+        <p>从下方「工具市场」安装官方或第三方工具。</p>
+      </div>`;
+
+  return `<section class="page">
+    <div class="page-head">
+      <div>
+        <h1>工具</h1>
+        <p>管理已安装的工具，或从本地 zip 安装新的第三方工具。</p>
+      </div>
+      <div class="head-actions">
+        <button type="button" class="btn" data-refresh>${icon('refresh', 14)}刷新</button>
+      </div>
+    </div>
+
+    <section class="section first">
+      <div class="section-head">
+        <h2>已安装</h2><span class="count">${tools.length}</span>
+        <span class="section-hint">${tools.filter((tool) => tool.enabled).length} 个已启用</span>
+      </div>
+      <div class="tool-grid">${cards}</div>
+    </section>
+
+    <section class="section">
+      <div class="section-head"><h2>工具市场</h2><span class="count">${official.length}</span></div>
+      <div class="market-card">
+        <div class="market-intro">
+          <div class="market-icon">${icon('upload', 19)}</div>
+          <div>
+            <h3>扩展你的工具箱</h3>
+            <p>官方工具随工具箱分发（<code>tools/</code> 目录），第三方工具从本地 zip 安装。安装前请确认来源可信。</p>
+          </div>
+        </div>
+        <div class="official-list">
+          ${official.length ? official.map((tool) => {
+            // Tools bundled in tools/ are installed by definition; a host may
+            // still report `installed:false` for a catalog entry.
+            const installed = tool.installed !== false;
+            return `<div class="official-item">
+            ${toolIcon(tool, true)}
+            <div class="official-info">
+              <div class="official-name">${escapeHtml(tool.name)}</div>
+              <div class="official-sub">v${escapeHtml(tool.version)} · ${escapeHtml(tool.author)}</div>
+            </div>
+            ${installed
+              ? `<span class="badge badge-ok">${icon('check', 11)}已安装</span>`
+              : `<button type="button" class="btn sm primary" data-install>${icon('download', 12)}安装</button>`}
+          </div>`;
+          }).join('') : `<div class="official-sub">暂无官方工具</div>`}
+        </div>
+        <button type="button" class="dropzone" data-install ${state.installing ? 'disabled' : ''}>
+          ${icon('upload', 22)}
+          <strong>${state.installing ? '正在安装…' : '从 zip 安装第三方工具…'}</strong>
+          <span>选择本地 .zip 工具包，安装完成后会出现在「已安装」列表</span>
+        </button>
+        <div class="path-line">
+          <span>官方工具目录</span>
+          <code title="${escapeAttr(data.officialToolsDir)}">${escapeHtml(data.officialToolsDir || '—')}</code>
+          <button type="button" class="link-btn" data-reveal="officialTools" ${data.officialToolsDir ? '' : 'disabled'}>${icon('folder', 12)}打开目录</button>
+        </div>
+      </div>
+    </section>
+  </section>`;
+}
+
+function renderToolCard(tool) {
+  const source = SOURCE_LABELS[tool.source] || '未知';
+  const sourceClass = SOURCE_CLASSES[tool.source] || 'source-installed';
+  const actions = (tool.actions || []).slice(0, 3);
+  const chips = actions.length
+    ? actions.map((action) => `<span class="action-chip" title="${escapeAttr(action.title)}">
+        <span class="chip-title">${escapeHtml(action.title)}</span>
+        ${action.combo ? `<kbd>${escapeHtml(action.combo)}</kbd>` : '<span class="chip-empty">未设置</span>'}
+      </span>`).join('')
+    : '<span class="chip-empty">暂无动作</span>';
+
+  return `<article class="tool-card${tool.enabled ? '' : ' is-disabled'}" data-tool-card="${escapeAttr(tool.id)}">
+    <div class="tool-top">
+      ${toolIcon(tool)}
+      <div class="tool-title">
+        <div class="tool-name-row">
+          <h3 title="${escapeAttr(tool.name)}">${escapeHtml(tool.name)}</h3>
+          <span class="pill version-pill">v${escapeHtml(tool.version)}</span>
+        </div>
+        <div class="tool-meta">
+          <span class="source-badge ${sourceClass}">${source}</span>
+          <span class="tool-author">${escapeHtml(tool.author)}</span>
+          <span>·</span>
+          <span>${formatBytes(tool.sizeBytes)}</span>
+          ${tool.error ? `<span class="source-badge source-dev" title="${escapeAttr(tool.error)}">清单异常</span>` : ''}
+        </div>
+      </div>
+    </div>
+    <p class="tool-desc" title="${escapeAttr(tool.description)}">${escapeHtml(tool.description)}</p>
+    <div class="action-chips">${chips}</div>
+    <div class="card-foot">
+      <button type="button" class="btn primary sm" data-open-tool="${escapeAttr(tool.id)}" ${tool.enabled ? '' : 'disabled title="请先启用该工具"'}>
+        ${icon('play', 13)}打开
+      </button>
+      <div class="foot-right">
+        <span class="tool-state ${tool.enabled ? 'on' : 'off'}"><i></i>${tool.enabled ? '已启用' : '已停用'}</span>
+        <button type="button" class="icon-btn" data-menu-tool="${escapeAttr(tool.id)}" aria-label="更多操作" title="更多操作">${icon('more', 16)}</button>
+      </div>
+    </div>
+  </article>`;
+}
+
+/* --- 6. Page: hotkeys ------------------------------------------------------- */
+function hotkeyStatus(action) {
+  if (!action.combo) return { kind: 'unset', label: '未设置', reason: '' };
+  if (action.effective) return { kind: 'ok', label: '生效', reason: '' };
+  return { kind: 'warn', label: '冲突', reason: action.reason || '被其它程序占用' };
+}
+
+function renderHotkeyRow(action) {
+  const recording = state.recording === action.id;
+  const status = hotkeyStatus(action);
+  const error = state.hotkeyError && state.hotkeyError.actionId === action.id
+    ? `<span class="hk-error" title="${escapeAttr(state.hotkeyError.message)}">${escapeHtml(state.hotkeyError.message)}</span>`
+    : '';
+  const reason = status.reason
+    ? `<span class="hk-reason" title="${escapeAttr(status.reason)}">${escapeHtml(status.reason)}</span>`
+    : '';
+  const label = recording ? (state.recordedCombo || '按下组合键…') : (action.combo || '未设置');
+
+  return `<div class="hk-row${recording ? ' is-recording' : ''}">
+    <div class="hk-name" title="${escapeAttr(action.title)}">${escapeHtml(action.title)}</div>
+    <div class="hk-combo-wrap">
+      <button type="button" class="kbd-btn${action.combo ? '' : ' empty'}${recording ? ' recording' : ''}" data-record="${escapeAttr(action.id)}" title="${recording ? '按 Esc 取消，Enter 确认' : '点击录制新的快捷键'}">${escapeHtml(label)}</button>
+      ${recording ? '<span class="record-hint">Esc 取消 · Enter 确认</span>' : error}
+    </div>
+    <div class="hk-status-wrap">
+      <span class="hk-status ${status.kind}"><i class="dot"></i>${status.label}</span>
+      ${reason}
+    </div>
+    <div class="hk-action">
+      <button type="button" class="btn sm ghost" data-reset-hotkey="${escapeAttr(action.id)}" ${recording ? 'disabled' : ''}>重置</button>
+    </div>
+  </div>`;
+}
+
+function renderHotkeyTable(actions, toolName = '') {
+  return `<div class="hk-table">
+    <div class="hk-row hk-head"><span>功能</span><span>快捷键</span><span>状态</span><span></span></div>
+    ${actions.map((action) => renderHotkeyRow(stripToolPrefix(action, toolName))).join('')}
+  </div>`;
+}
+
+/**
+ * The host prefixes tool action titles with the tool name ("序列帧对齐：导出").
+ * Inside a per-tool section the header already names the tool, so drop it.
+ */
+function stripToolPrefix(action, toolName) {
+  if (!toolName) return action;
+  const prefix = `${toolName}：`;
+  if (typeof action.title === 'string' && action.title.startsWith(prefix)) {
+    return { ...action, title: action.title.slice(prefix.length) };
+  }
+  return action;
+}
+
+function renderHotkeys() {
+  const data = state.data;
+  const appActions = data.actions.filter((action) => action.scope === 'app');
+  const groups = [];
+  for (const tool of data.tools) {
+    const actions = data.actions.filter((action) => action.scope === 'tool' && action.toolId === tool.id);
+    if (actions.length) groups.push({ tool, actions });
+  }
+  const total = data.actions.length;
+
+  return `<section class="page">
+    <div class="page-head">
+      <div>
+        <h1>快捷键</h1>
+        <p>点击组合键开始录制。全局快捷键在所有工具窗口中共享。</p>
+      </div>
+      <span class="page-badge"><span class="dot"></span>${total} 项快捷键</span>
+    </div>
+
+    <section class="hk-section">
+      <div class="hk-group-head"><h2>工具箱</h2><span class="source-badge source-official">应用级</span></div>
+      ${appActions.length ? renderHotkeyTable(appActions) : `<div class="empty-state"><div class="empty-ico">${icon('keyboard', 20)}</div><h3>暂无应用快捷键</h3><p>工具箱启动后会自动注册默认快捷键。</p></div>`}
+    </section>
+
+    ${groups.map(({ tool, actions }) => `<section class="hk-section">
+      <div class="hk-group-head">
+        ${toolIcon(tool, true)}
+        <h2>${escapeHtml(tool.name)}</h2>
+        <span class="source-badge ${SOURCE_CLASSES[tool.source] || 'source-installed'}">${SOURCE_LABELS[tool.source] || '工具'}</span>
+      </div>
+      ${renderHotkeyTable(actions, tool.name)}
+    </section>`).join('')}
+
+    <div class="hk-note">
+      ${icon('alert', 15)}
+      <span>全局快捷键在前台为管理员权限窗口或全屏独占游戏时可能不生效。若提示冲突，请换一个组合键，或关闭占用该组合键的程序。</span>
+    </div>
+  </section>`;
+}
+
+/* --- 7. Page: settings ------------------------------------------------------ */
+function settingsCard(title, subtitle, body, extraClass = '') {
+  return `<section class="settings-card ${extraClass}">
+    <div class="settings-head"><h2>${title}</h2><p>${subtitle}</p></div>
+    ${body}
+  </section>`;
+}
+
+function switchHtml(key, on, label) {
+  return `<button type="button" class="switch${on ? ' on' : ''}" role="switch" aria-checked="${on ? 'true' : 'false'}" aria-label="${escapeAttr(label)}" data-toggle="${key}"><span class="switch-thumb"></span></button>`;
+}
+
+function renderSettings() {
+  const data = state.data;
+  const config = data.config;
+  const ballY = data.ballYPercent;
+  const theme = config.theme || 'dark';
+
+  return `<section class="page">
+    <div class="page-head">
+      <div>
+        <h1>设置</h1>
+        <p>调整工具箱的外观、启动方式与数据位置。</p>
+      </div>
+      <span class="page-badge">${host && host.isHosted ? '已连接宿主' : '浏览器预览'}</span>
+    </div>
+
+    <div class="settings-stack">
+      ${settingsCard('外观', '界面配色与悬浮圆球的位置。', `
+        <div class="setting-row">
+          <div class="setting-label"><span>主题</span><small>深色主题已针对工具箱优化</small></div>
+          <div class="setting-control">
+            <div class="seg" title="主题切换即将支持">
+              <button type="button" class="seg-item${theme === 'system' ? ' active' : ''}" disabled title="即将支持">跟随系统</button>
+              <button type="button" class="seg-item${theme === 'dark' ? ' active' : ''}" disabled title="即将支持">深色</button>
+              <button type="button" class="seg-item${theme === 'light' ? ' active' : ''}" disabled title="即将支持">浅色</button>
+            </div>
+            <span class="soon">即将支持</span>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label"><span>圆球停靠</span><small>悬浮圆球在屏幕边缘的位置</small></div>
+          <div class="setting-control">
+            <div class="seg">
+              <button type="button" class="seg-item${config.ballSide === 'right' ? ' active' : ''}" data-ballside="right">右侧</button>
+              <button type="button" class="seg-item${config.ballSide === 'left' ? ' active' : ''}" data-ballside="left">左侧</button>
+            </div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label"><span>圆球纵向位置</span><small>0% 为屏幕顶部，100% 为底部</small></div>
+          <div class="setting-control">
+            <div class="range-wrap">
+              <input type="range" id="ballY" min="0" max="100" step="1" value="${ballY}" style="--fill:${ballY}%" aria-label="圆球纵向位置" />
+              <output class="range-out" id="ballYOut">${ballY}%</output>
+            </div>
+          </div>
+        </div>
+      `)}
+
+      ${settingsCard('启动', '控制工具箱随系统启动以及与托盘的交互。', `
+        <div class="setting-row">
+          <div class="setting-label"><span>开机自启</span><small>登录 Windows 后自动启动工具箱</small></div>
+          <div class="setting-control">${switchHtml('autostart', Boolean(config.autostart), '开机自启')}</div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label"><span>关闭主窗口时最小化到托盘</span><small>关闭窗口后继续在后台运行</small></div>
+          <div class="setting-control">${switchHtml('closeToTray', Boolean(config.closeToTray), '关闭主窗口时最小化到托盘')}</div>
+        </div>
+      `)}
+
+      ${settingsCard('数据', '配置与工具数据的位置。便携模式下所有内容都在程序目录。', `
+        <div class="setting-row">
+          <div class="setting-label" style="flex:1;min-width:0">
+            <span>数据目录</span>
+            <small>配置、日志与第三方工具都保存在这里</small>
+          </div>
+          <div class="setting-control wide">
+            <div class="path-box" style="flex:1">
+              <code title="${escapeAttr(data.dataDir)}">${escapeHtml(data.dataDir || '—')}</code>
+              <button type="button" class="btn sm" data-reveal="data">${icon('folder', 13)}打开目录</button>
+              <button type="button" class="btn sm" data-copy="${escapeAttr(data.dataDir)}">${icon('copy', 13)}复制路径</button>
+            </div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label"><span>便携模式</span><small>删除 data/ 目录即可完全重置</small></div>
+          <div class="setting-control"><span class="badge ${data.portable ? 'badge-ok' : 'badge-warn'}">${data.portable ? '已启用 · 便携模式' : '未启用 · 非便携'}</span></div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label"><span>维护</span><small>查看运行日志或导出当前配置</small></div>
+          <div class="setting-control data-actions">
+            <button type="button" class="btn sm" data-reveal="logs">${icon('log', 13)}打开日志目录</button>
+            <button type="button" class="btn sm" disabled title="即将支持">${icon('download', 13)}导出配置</button>
+          </div>
+        </div>
+      `)}
+
+      ${settingsCard('危险区', '这些操作会影响工具箱的运行状态，请谨慎使用。', `
+        <div class="danger-actions">
+          <button type="button" class="btn" data-restart>${icon('restart', 14)}重启工具箱</button>
+          <button type="button" class="btn danger" data-quit>${icon('power', 14)}退出</button>
+        </div>
+      `, 'danger-zone')}
+    </div>
+    <p class="settings-foot">设置修改后立即写入配置文件；部分外观选项会在后续版本开放。</p>
+  </section>`;
+}
+
+/* --- 8. Page: about --------------------------------------------------------- */
+function renderAbout() {
+  const data = state.data;
+  return `<section class="page">
+    <div class="about-wrap">
+      <div class="about-card">
+        <div class="about-logo">${icon('logo', 34)}</div>
+        <h1>工具箱<span class="about-en">Toolbox</span></h1>
+        <span class="pill version-pill about-version">v${escapeHtml(data.version)}</span>
+        <p class="about-desc">
+          一个轻量的桌面工具集合。把常用的图像、文件与系统小工具集中在一个窗口里，
+          通过悬浮圆球和全局快捷键随时呼出，让工具触手可及。
+        </p>
+        <div class="tech-line">
+          <span>基于</span><b>Tauri 2</b><span class="tech-dot">·</span><b>Rust</b><span class="tech-dot">·</span><b>WebView2</b><span>构建</span>
+        </div>
+        <div class="about-note">
+          ${icon('folder', 15)}
+          <span>${data.portable
+            ? '当前为便携模式：配置、日志与第三方工具全部保存在程序目录，不会写入系统用户目录。'
+            : '当前为非便携模式：配置与数据保存在系统用户目录，卸载前请先备份。'}</span>
+        </div>
+        <div class="about-meta">
+          <div><span>数据目录</span><strong title="${escapeAttr(data.dataDir)}">${escapeHtml(data.dataDir || '—')}</strong></div>
+          <div><span>运行方式</span><strong>${host && host.isHosted ? 'Tauri 桌面宿主' : '浏览器预览（Mock）'}</strong></div>
+        </div>
+        <div class="about-foot">数据完全保存在程序目录，删除 data/ 即完全重置。</div>
+      </div>
+    </div>
+  </section>`;
+}
+
+/* --- 9. Data actions -------------------------------------------------------- */
+let refreshPromise = null;
+async function refresh({ silent = false } = {}) {
+  if (refreshPromise) return refreshPromise;
+  refreshPromise = (async () => {
+    try {
+      const raw = await invoke('get_state');
+      state.data = normalizeState(raw);
+      state.error = null;
+      state.loading = false;
+      render({ preserveScroll: true });
+    } catch (error) {
+      state.loading = false;
+      state.error = error && error.message ? error.message : String(error);
+      render();
+      if (!silent) toast('加载失败，请稍后重试', 'danger');
+    } finally {
+      refreshPromise = null;
+    }
+  })();
+  return refreshPromise;
+}
+
+function normalizeState(raw) {
+  const data = raw || {};
+  const config = {
+    locale: 'zh-CN', theme: 'dark', ballSide: 'right', ballY: 50,
+    panelHotkey: 'Alt+Space', autostart: false, closeToTray: true,
+    ...(data.config || {})
+  };
+  // The host may express the ball position either as a 0..1 fraction (Rust
+  // `Config.ball_y`) or as a 0..100 percent. Remember which one it uses so the
+  // slider always reads in percent while the patch keeps the host's unit.
+  const rawY = Number(config.ballY);
+  const fractionUnit = Number.isFinite(rawY) && rawY <= 1;
+  const percent = fractionUnit ? rawY * 100 : (Number.isFinite(rawY) ? rawY : 50);
+  return {
+    version: data.version || '0.1.0',
+    portable: Boolean(data.portable),
+    dataDir: data.dataDir || '',
+    officialToolsDir: data.officialToolsDir || '',
+    installedToolsDir: data.installedToolsDir || '',
+    ballYFraction: fractionUnit,
+    ballYPercent: Math.min(100, Math.max(0, Math.round(percent))),
+    config,
+    tools: Array.isArray(data.tools) ? data.tools : [],
+    actions: Array.isArray(data.actions) ? data.actions : [],
+    hotkeys: data.hotkeys && typeof data.hotkeys === 'object' ? data.hotkeys : {}
+  };
+}
+
+function setTab(tab) {
+  if (!NAV_ITEMS.some((item) => item.id === tab) || state.tab === tab) return;
+  state.tab = tab;
+  state.recording = null;
+  state.recordedCombo = null;
+  state.hotkeyError = null;
+  closeMenu();
+  render({ animate: true });
+  $('#view').scrollTop = 0;
+}
+
+async function savePatch(patch) {
+  try {
+    const result = await invoke('save_config', { patch });
+    if (result && result.ok === false) throw new Error(result.error || '保存失败');
+    Object.assign(state.data.config, patch);
+    toast('已保存', 'ok');
+    return true;
+  } catch (error) {
+    toast(`保存失败：${error && error.message ? error.message : error}`, 'danger');
+    return false;
+  }
+}
+
+async function handleToggle(key) {
+  if (state.saving) return;
+  const config = state.data.config;
+  const previous = Boolean(config[key]);
+  config[key] = !previous;
+  state.saving = true;
+  render({ preserveScroll: true });
+  const ok = await savePatch({ [key]: config[key] });
+  state.saving = false;
+  if (!ok) {
+    config[key] = previous;
+    render({ preserveScroll: true });
+  }
+}
+
+async function handleBallSide(side) {
+  if (state.saving || state.data.config.ballSide === side) return;
+  const previous = state.data.config.ballSide;
+  state.data.config.ballSide = side;
+  state.saving = true;
+  render({ preserveScroll: true });
+  const ok = await savePatch({ ballSide: side });
+  state.saving = false;
+  if (!ok) {
+    state.data.config.ballSide = previous;
+    render({ preserveScroll: true });
+  }
+}
+
+async function handleBallY(input) {
+  const value = Math.min(100, Math.max(0, Number(input.value) || 0));
+  const data = state.data;
+  const previous = data.ballYPercent;
+  data.ballYPercent = value;
+  // Keep the host's own unit: fraction (0..1) or percent (0..100).
+  const patchValue = data.ballYFraction ? value / 100 : value;
+  const ok = await savePatch({ ballY: patchValue });
+  if (!ok) data.ballYPercent = previous;
+}
+
+async function openTool(id, button) {
+  const tool = state.data.tools.find((item) => item.id === id);
+  if (!tool) return;
+  if (button) button.disabled = true;
+  try {
+    const result = await invoke('open_tool', { id });
+    if (result && result.ok === false) throw new Error(result.error || '打开失败');
+    toast(`已打开「${tool.name}」`, 'ok');
+  } catch (error) {
+    toast(`打开失败：${error && error.message ? error.message : error}`, 'danger');
+  } finally {
+    if (button && document.body.contains(button)) button.disabled = false;
+  }
+}
+
+async function installTool(button) {
+  if (state.installing) return;
+  state.installing = true;
+  if (button) {
+    button.disabled = true;
+    const strong = button.querySelector('strong');
+    if (strong) strong.textContent = '正在安装…';
+  }
+  try {
+    const result = await invoke('install_tool', {});
+    if (result && result.ok) {
+      toast(result.id ? `安装成功：${result.id}` : '工具已安装', 'ok');
+      await refresh({ silent: true });
+    } else if (result && result.error === 'cancelled') {
+      toast('已取消安装', 'info');
+    } else {
+      toast(result && result.error ? `安装失败：${result.error}` : '安装失败', 'warn');
+    }
+  } catch (error) {
+    toast(`安装失败：${error && error.message ? error.message : error}`, 'danger');
+  } finally {
+    state.installing = false;
+    if (button && document.body.contains(button)) {
+      button.disabled = false;
+      const strong = button.querySelector('strong');
+      if (strong) strong.textContent = '从 zip 安装第三方工具…';
+    }
+  }
+}
+
+async function revealPath(kind) {
+  try {
+    await invoke('reveal_path', { kind });
+    toast('已打开目录', 'ok');
+  } catch (error) {
+    toast(`无法打开目录：${error && error.message ? error.message : error}`, 'danger');
+  }
+}
+
+async function copyText(text) {
+  if (!text) {
+    toast('路径为空，无法复制', 'warn');
+    return;
+  }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('路径已复制', 'ok');
+  } catch (error) {
+    try {
+      const area = document.createElement('textarea');
+      area.value = text;
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.appendChild(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+      toast('路径已复制', 'ok');
+    } catch (fallbackError) {
+      toast('复制失败，请手动选择路径', 'danger');
+    }
+  }
+}
+
+/* --- 10. Hotkey recording --------------------------------------------------- */
+function startRecording(actionId) {
+  state.recording = actionId;
+  state.recordedCombo = null;
+  state.hotkeyError = null;
+  render({ preserveScroll: true });
+  requestAnimationFrame(() => {
+    const target = $('.kbd-btn.recording');
+    if (target) target.focus();
+  });
+}
+
+function cancelRecording() {
+  state.recording = null;
+  state.recordedCombo = null;
+  state.hotkeyError = null;
+  render({ preserveScroll: true });
+}
+
+function normalizeKey(event) {
+  const code = event.code || '';
+  if (/^Key[A-Z]$/.test(code)) return code.slice(3);
+  if (/^Digit[0-9]$/.test(code)) return code.slice(5);
+  if (/^F([1-9]|1[0-9]|2[0-4])$/.test(code)) return code;
+  if (KEY_NAMES[code]) return KEY_NAMES[code];
+  return null;
+}
+
+function comboFromEvent(event) {
+  const key = normalizeKey(event);
+  if (!key) return null;
+  const parts = [];
+  if (event.ctrlKey) parts.push('Ctrl');
+  if (event.altKey) parts.push('Alt');
+  if (event.shiftKey) parts.push('Shift');
+  if (event.metaKey) parts.push('Win');
+  parts.push(key);
+  return parts.join('+');
+}
+
+async function commitRecording() {
+  if (!state.recording || state.committing) return;
+  if (!state.recordedCombo) {
+    toast('请先按下一个非修饰键', 'warn');
+    return;
+  }
+  const actionId = state.recording;
+  const combo = state.recordedCombo;
+  state.committing = true;
+  try {
+    const result = await invoke('set_hotkey', { actionId, combo });
+    if (result && result.ok === false) {
+      state.recording = null;
+      state.recordedCombo = null;
+      state.hotkeyError = { actionId, message: result.reason || '快捷键设置失败' };
+      render({ preserveScroll: true });
+      toast(result.reason || '快捷键设置失败', 'warn');
+      return;
+    }
+    state.recording = null;
+    state.recordedCombo = null;
+    state.hotkeyError = null;
+    await refresh({ silent: true });
+    toast('快捷键已更新', 'ok');
+  } catch (error) {
+    state.hotkeyError = { actionId, message: error && error.message ? error.message : '快捷键设置失败' };
+    render({ preserveScroll: true });
+    toast('快捷键设置失败', 'danger');
+  } finally {
+    state.committing = false;
+  }
+}
+
+async function resetHotkey(actionId) {
+  try {
+    const result = await invoke('reset_hotkey', { actionId });
+    if (result && result.ok === false) {
+      toast(result.reason || '重置失败', 'warn');
+      return;
+    }
+    state.hotkeyError = null;
+    await refresh({ silent: true });
+    toast('已恢复默认快捷键', 'ok');
+  } catch (error) {
+    toast(`重置失败：${error && error.message ? error.message : error}`, 'danger');
+  }
+}
+
+/* --- 11. Context menu ------------------------------------------------------- */
+function closeMenu() {
+  if (menuEl) {
+    menuEl.remove();
+    menuEl = null;
+    menuToolId = null;
+  }
+}
+
+/**
+ * Promise-based confirm dialog. `window.confirm` blocks the WebView message
+ * loop (and every pending IPC promise with it), so use an in-page modal.
+ */
+function confirmDialog({ title, message, confirmLabel = '确定', cancelLabel = '取消', danger = false }) {
+  return new Promise((resolve) => {
+    const backdrop = document.createElement('div');
+    backdrop.className = 'modal-backdrop';
+    backdrop.innerHTML = `<div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-head">
+        <div class="modal-ico${danger ? ' danger' : ''}">${icon(danger ? 'alert' : 'info', 18)}</div>
+        <div><h2 id="modal-title">${escapeHtml(title)}</h2><p>${escapeHtml(message)}</p></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-modal-cancel>${escapeHtml(cancelLabel)}</button>
+        <button type="button" class="btn ${danger ? 'danger' : 'primary'}" data-modal-ok>${escapeHtml(confirmLabel)}</button>
+      </div>
+    </div>`;
+    const previousFocus = document.activeElement;
+    const finish = (value) => {
+      document.removeEventListener('keydown', onKey, true);
+      backdrop.remove();
+      if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+      resolve(value);
+    };
+    const onKey = (event) => {
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(false); }
+      if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); event.stopPropagation(); finish(true); }
+    };
+    backdrop.addEventListener('click', (event) => {
+      if (event.target === backdrop) finish(false);
+      if (event.target.closest('[data-modal-ok]')) finish(true);
+      if (event.target.closest('[data-modal-cancel]')) finish(false);
+    });
+    document.addEventListener('keydown', onKey, true);
+    document.body.appendChild(backdrop);
+    const ok = backdrop.querySelector('[data-modal-ok]');
+    if (ok) ok.focus();
+  });
+}
+
+function openToolMenu(button, tool) {
+  closeMenu();
+  menuToolId = tool.id;
+  const items = [
+    { action: 'close', label: '关闭', icon: 'x' },
+    { action: 'reveal', label: '打开所在目录', icon: 'folder' },
+    { action: 'toggle', label: tool.enabled ? '禁用' : '启用', icon: tool.enabled ? 'pause' : 'check' }
+  ];
+  if (tool.source !== 'official') items.push({ separator: true }, { action: 'uninstall', label: '卸载', icon: 'trash', danger: true });
+
+  menuEl = document.createElement('div');
+  menuEl.className = 'ctx-menu';
+  menuEl.setAttribute('role', 'menu');
+  menuEl.innerHTML = items.map((item) => item.separator
+    ? '<div class="ctx-sep"></div>'
+    : `<button type="button" class="ctx-item${item.danger ? ' danger' : ''}" role="menuitem" data-menu-action="${item.action}" data-menu-tool="${escapeAttr(tool.id)}">${icon(item.icon, 14)}<span>${item.label}</span></button>`
+  ).join('');
+  document.body.appendChild(menuEl);
+
+  const rect = button.getBoundingClientRect();
+  const menuRect = menuEl.getBoundingClientRect();
+  let left = Math.min(rect.right - menuRect.width, window.innerWidth - menuRect.width - 8);
+  let top = rect.bottom + 6;
+  if (top + menuRect.height > window.innerHeight - 8) top = rect.top - menuRect.height - 6;
+  menuEl.style.left = `${Math.max(8, left)}px`;
+  menuEl.style.top = `${Math.max(8, top)}px`;
+  const first = menuEl.querySelector('.ctx-item');
+  if (first) first.focus();
+}
+
+async function handleMenuAction(action, id) {
+  const tool = state.data.tools.find((item) => item.id === id);
+  if (!tool) return;
+  if (action === 'close') {
+    try {
+      await invoke('close_tool', { id });
+      toast(`已关闭「${tool.name}」`, 'ok');
+    } catch (error) {
+      toast('关闭失败', 'danger');
+    }
+    return;
+  }
+  if (action === 'reveal') {
+    await revealPath(tool.source === 'official' ? 'officialTools' : 'installedTools');
+    return;
+  }
+  if (action === 'toggle') {
+    try {
+      const result = await invoke('set_tool_enabled', { id, enabled: !tool.enabled });
+      if (result && result.ok === false) throw new Error(result.error || '操作失败');
+      tool.enabled = !tool.enabled;
+      render({ preserveScroll: true });
+      toast(tool.enabled ? `已启用「${tool.name}」` : `已禁用「${tool.name}」`, 'ok');
+    } catch (error) {
+      toast(`操作失败：${error && error.message ? error.message : error}`, 'danger');
+    }
+    return;
+  }
+  if (action === 'uninstall') {
+    const confirmed = await confirmDialog({
+      title: `卸载「${tool.name}」`,
+      message: '工具目录将被删除，已保存的工具数据不会保留。此操作不可撤销。',
+      confirmLabel: '卸载',
+      danger: true
+    });
+    if (!confirmed) return;
+    try {
+      const result = await invoke('uninstall_tool', { id });
+      if (result && result.ok === false) throw new Error(result.error || '卸载失败');
+      toast(`已卸载「${tool.name}」`, 'ok');
+      await refresh({ silent: true });
+    } catch (error) {
+      toast(`卸载失败：${error && error.message ? error.message : error}`, 'danger');
+    }
+  }
+}
+
+/* --- 12. Events ------------------------------------------------------------- */
+function onRecordKey(event) {
+  if (!state.recording) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    event.stopPropagation();
+    cancelRecording();
+    return;
+  }
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    event.stopPropagation();
+    commitRecording();
+    return;
+  }
+  if (MODIFIER_KEYS.has(event.key)) {
+    event.preventDefault();
+    return;
+  }
+  const combo = comboFromEvent(event);
+  if (!combo) return;
+  event.preventDefault();
+  event.stopPropagation();
+  state.recordedCombo = combo;
+  const target = $('.kbd-btn.recording');
+  if (target) target.textContent = combo;
+}
+
+async function onClick(event) {
+  const target = event.target instanceof Element ? event.target : event.target.parentElement;
+  if (!target) return;
+
+  const menuAction = target.closest('[data-menu-action]');
+  if (menuAction) {
+    const action = menuAction.dataset.menuAction;
+    const id = menuAction.dataset.menuTool;
+    closeMenu();
+    await handleMenuAction(action, id);
+    return;
+  }
+  if (menuEl && !menuEl.contains(target) && !target.closest('[data-menu-tool]')) closeMenu();
+
+  const nav = target.closest('[data-tab]');
+  if (nav) { setTab(nav.dataset.tab); return; }
+
+  const menuButton = target.closest('[data-menu-tool]');
+  if (menuButton) {
+    const tool = state.data && state.data.tools.find((item) => item.id === menuButton.dataset.menuTool);
+    if (tool) openToolMenu(menuButton, tool);
+    return;
+  }
+
+  const refreshButton = target.closest('[data-refresh]');
+  if (refreshButton) { await refresh(); toast('已刷新', 'ok'); return; }
+
+  const retryButton = target.closest('[data-retry]');
+  if (retryButton) { state.loading = true; state.error = null; render(); await refresh(); return; }
+
+  const openButton = target.closest('[data-open-tool]');
+  if (openButton) { await openTool(openButton.dataset.openTool, openButton); return; }
+
+  const installButton = target.closest('[data-install]');
+  if (installButton) { await installTool(installButton); return; }
+
+  const revealButton = target.closest('[data-reveal]');
+  if (revealButton) { await revealPath(revealButton.dataset.reveal); return; }
+
+  const copyButton = target.closest('[data-copy]');
+  if (copyButton) { await copyText(copyButton.dataset.copy); return; }
+
+  const recordButton = target.closest('[data-record]');
+  if (recordButton) { startRecording(recordButton.dataset.record); return; }
+
+  const resetButton = target.closest('[data-reset-hotkey]');
+  if (resetButton) { await resetHotkey(resetButton.dataset.resetHotkey); return; }
+
+  const toggle = target.closest('[data-toggle]');
+  if (toggle) { await handleToggle(toggle.dataset.toggle); return; }
+
+  const side = target.closest('[data-ballside]');
+  if (side) { await handleBallSide(side.dataset.ballside); return; }
+
+  const restart = target.closest('[data-restart]');
+  if (restart) {
+    try {
+      await invoke('restart_app');
+      toast(host && host.isHosted ? '正在重启工具箱…' : '浏览器预览：已模拟重启', 'info');
+    } catch (error) {
+      toast('重启失败', 'danger');
+    }
+    return;
+  }
+
+  const quit = target.closest('[data-quit]');
+  if (quit) {
+    try {
+      await invoke('quit_app');
+      toast(host && host.isHosted ? '工具箱已退出' : '浏览器预览：已模拟退出', 'info');
+    } catch (error) {
+      toast('退出失败', 'danger');
+    }
+  }
+}
+
+function onInput(event) {
+  const target = event.target;
+  if (target && target.id === 'ballY') {
+    const value = Math.min(100, Math.max(0, Number(target.value) || 0));
+    target.style.setProperty('--fill', `${value}%`);
+    const output = $('#ballYOut');
+    if (output) output.textContent = `${value}%`;
+  }
+}
+
+async function onChange(event) {
+  const target = event.target;
+  if (target && target.id === 'ballY') {
+    await handleBallY(target);
+  }
+}
+
+/* --- 13. Boot --------------------------------------------------------------- */
+function bindWindowControls() {
+  const minimize = $('#win-min');
+  const close = $('#win-close');
+  minimize.addEventListener('click', async () => {
+    try {
+      if (!host || !host.isHosted) {
+        toast('浏览器预览：已模拟最小化', 'info');
+        return;
+      }
+      const result = host && typeof host.minimizeWindow === 'function'
+        ? await host.minimizeWindow()
+        : { ok: false };
+      if (!result || result.ok === false) toast('当前宿主未提供最小化命令', 'warn');
+    } catch (error) {
+      toast('最小化失败', 'danger');
+    }
+  });
+  close.addEventListener('click', async () => {
+    try {
+      await invoke('close_window', { label: 'main' });
+      if (!host || !host.isHosted) toast('浏览器预览：已模拟关闭窗口', 'info');
+    } catch (error) {
+      toast('关闭失败', 'danger');
+    }
+  });
+}
+
+async function boot() {
+  render();
+  document.addEventListener('click', onClick);
+  document.addEventListener('keydown', onRecordKey, true);
+  document.addEventListener('input', onInput);
+  document.addEventListener('change', onChange);
+  document.addEventListener('scroll', () => closeMenu(), true);
+  window.addEventListener('resize', closeMenu);
+
+  host = await loadHost();
+  invoke = host.invoke;
+  listen = host.listen;
+  bindWindowControls();
+
+  listen('tools-changed', () => refresh({ silent: true }));
+  listen('config-changed', () => refresh({ silent: true }));
+
+  await refresh();
+}
+
+boot().catch((error) => {
+  state.loading = false;
+  state.error = error && error.message ? error.message : String(error);
+  render();
+  toast('工具箱启动失败', 'danger');
+});
+</script>
+</body>
+</html>

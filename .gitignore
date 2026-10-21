@@ -1,0 +1,25 @@
+# .gitignore — Toolbox
+
+# Rust
+/src-tauri/target/
+**/*.rs.bk
+
+# Node (UI is plain HTML today, but keep room for a build step)
+node_modules/
+/dist/
+
+# Local state — never commit a data directory
+/data/
+**/data/
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+Thumbs.db
+desktop.ini
+
+# Scratch
+*.log
+/scratch/
+*.png.bak

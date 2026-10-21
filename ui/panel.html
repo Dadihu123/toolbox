@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Toolbox 面板</title>
+<style>
+  :root {
+    --bg: #14161a;
+    --bg-2: #1b1e24;
+    --bg-3: #22262e;
+    --line: #323844;
+    --line-soft: #272c36;
+    --fg: #dfe3ea;
+    --fg-dim: #98a1b0;
+    --fg-faint: #6b7484;
+    --accent: #4ea1ff;
+    --accent-dim: #2b6cb0;
+    --ok: #3ecf8e;
+    --warn: #e8b23a;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%; margin: 0; overflow: hidden;
+    background: transparent;
+    color: var(--fg);
+    font: 13px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+  }
+  #panel {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    background: rgba(20, 22, 26, 0.97);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  }
+  /* ---- search ---- */
+  #searchbar {
+    display: flex; align-items: center; gap: 9px;
+    padding: 13px 15px;
+    border-bottom: 1px solid var(--line-soft);
+    flex: 0 0 auto;
+  }
+  #searchbar svg { flex: 0 0 auto; color: var(--fg-faint); }
+  #search {
+    flex: 1; min-width: 0;
+    background: none; border: none; outline: none;
+    color: var(--fg); font: inherit; font-size: 14px;
+  }
+  #search::placeholder { color: var(--fg-faint); }
+  #esc-hint {
+    font-size: 11px; color: var(--fg-faint);
+    border: 1px solid var(--line); border-radius: 4px;
+    padding: 1px 5px; flex: 0 0 auto;
+  }
+  /* ---- list ---- */
+  #results { flex: 1; overflow-y: auto; padding: 6px; }
+  #results::-webkit-scrollbar { width: 8px; }
+  #results::-webkit-scrollbar-thumb { background: #2c323c; border-radius: 4px; }
+  .group-label {
+    font-size: 11px; color: var(--fg-faint);
+    padding: 8px 9px 4px; letter-spacing: 0.04em;
+  }
+  .row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 9px; border-radius: 8px;
+    cursor: pointer;
+  }
+  .row.sel { background: var(--bg-3); }
+  .row.sel .row-title { color: #fff; }
+  .row-icon {
+    width: 30px; height: 30px; flex: 0 0 auto;
+    border-radius: 8px; overflow: hidden;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 600; color: #fff;
+    background: var(--accent-dim);
+  }
+  .row-icon img { width: 100%; height: 100%; object-fit: contain; }
+  .row-main { flex: 1; min-width: 0; }
+  .row-title {
+    color: var(--fg); font-size: 13px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .row-sub {
+    color: var(--fg-faint); font-size: 11px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .row-badge {
+    flex: 0 0 auto; font-size: 10px; color: var(--fg-dim);
+    border: 1px solid var(--line); border-radius: 4px; padding: 0 4px;
+  }
+  .row kbd {
+    flex: 0 0 auto;
+    font: 11px/1.4 "Cascadia Mono", Consolas, monospace;
+    color: var(--fg-dim);
+    background: var(--bg-3);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+  .empty {
+    color: var(--fg-faint); text-align: center;
+    padding: 40px 20px; font-size: 12px;
+  }
+  /* ---- footer ---- */
+  #footer {
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 6px;
+    padding: 9px 11px;
+    border-top: 1px solid var(--line-soft);
+    background: rgba(27, 30, 36, 0.6);
+  }
+  .fbtn {
+    display: flex; align-items: center; gap: 5px;
+    background: none; border: 1px solid transparent; border-radius: 6px;
+    color: var(--fg-dim); font: inherit; font-size: 12px;
+    padding: 4px 8px; cursor: pointer;
+  }
+  .fbtn:hover { background: var(--bg-3); color: var(--fg); }
+  .fbtn:focus-visible { outline: 1px solid var(--accent); }
+  #footer .spacer { flex: 1; }
+  #version { color: var(--fg-faint); font-size: 11px; padding-right: 4px; }
+</style>
+</head>
+<body>
+<div id="panel">
+  <div id="searchbar">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+      <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+    </svg>
+    <input id="search" type="text" placeholder="搜索工具或功能…" autocomplete="off" spellcheck="false" />
+    <span id="esc-hint">Esc</span>
+  </div>
+  <div id="results"></div>
+  <div id="footer">
+    <button class="fbtn" data-act="main">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <rect x="3" y="4" width="18" height="16" rx="2"></rect><path d="M3 9h18"></path>
+      </svg>
+      主界面
+    </button>
+    <button class="fbtn" data-act="refresh">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 5v6h-6"></path>
+      </svg>
+      刷新
+    </button>
+    <span class="spacer"></span>
+    <span id="version"></span>
+  </div>
+</div>
+
+<script type="module">
+// ---------------------------------------------------------------- IPC shim
+// Works both inside Tauri and when opened directly in a browser (mock data),
+// so the panel can be iterated on without rebuilding the Rust host.
+const HOSTED = Boolean(window.__TAURI_INTERNALS__);
+
+async function invoke(cmd, args = {}) {
+  if (HOSTED) return window.__TAURI_INTERNALS__.invoke(cmd, args);
+  return MOCK[cmd] ? MOCK[cmd](args) : null;
+}
+
+const MOCK_TOOLS = [
+  { id: "sprite-align", name: "序列帧对齐", description: "切分 sprite sheet、锚点对齐、导出 ZIP", source: "official", accent: "#4ea1ff", iconDataUrl: null, error: "", actions: [
+    { id: "open", title: "打开序列帧对齐", combo: "Ctrl+Alt+S" },
+    { id: "realign", title: "重新对齐", combo: "Ctrl+Alt+Z" },
+    { id: "export-zip", title: "导出为 ZIP", combo: "Ctrl+Alt+E" },
+  ]},
+  { id: "rename-batch", name: "批量重命名", description: "正则批量改名，支持预览与撤销", source: "installed", accent: "#3ecf8e", iconDataUrl: null, error: "", actions: [
+    { id: "open", title: "打开批量重命名", combo: "Ctrl+Alt+R" },
+  ]},
+  { id: "color-picker", name: "取色器", description: "屏幕取色、历史记录、格式转换", source: "installed", accent: "#e8b23a", iconDataUrl: null, error: "", actions: [
+    { id: "open", title: "打开取色器", combo: "Ctrl+Alt+C" },
+    { id: "pick", title: "立即取色", combo: "Ctrl+Alt+Shift+C" },
+  ]},
+];
+
+const MOCK = {
+  get_state: () => ({
+    version: "0.1.0", portable: true,
+    tools: MOCK_TOOLS,
+    config: { panelHotkey: "Ctrl+Shift+T" },
+  }),
+  open_tool: ({ id }) => { console.log("open_tool", id); return null; },
+  open_main: () => { console.log("open_main"); return null; },
+  close_window: () => null,
+};
+
+// ------------------------------------------------------------------- state
+let state = { tools: [], version: "", query: "", rows: [], sel: 0 };
+
+const $search = document.getElementById("search");
+const $results = document.getElementById("results");
+const $version = document.getElementById("version");
+
+// ----------------------------------------------------------------- helpers
+function initial(name) {
+  const ch = (name || "?").trim().charAt(0);
+  return ch ? ch.toUpperCase() : "?";
+}
+
+function rowIcon(tool) {
+  const wrap = document.createElement("div");
+  wrap.className = "row-icon";
+  wrap.style.background = tool.accent || "#2b6cb0";
+  if (tool.iconDataUrl) {
+    const img = document.createElement("img");
+    img.src = tool.iconDataUrl;
+    img.alt = "";
+    wrap.appendChild(img);
+  } else {
+    wrap.textContent = initial(tool.name);
+  }
+  return wrap;
+}
+
+// ------------------------------------------------------------------- build
+function buildRows() {
+  const q = state.query.trim().toLowerCase();
+  const rows = [];
+  const enabled = state.tools.filter(t => !t.error);
+
+  for (const tool of enabled) {
+    const toolHit = !q || tool.name.toLowerCase().includes(q) || tool.id.includes(q)
+      || (tool.description || "").toLowerCase().includes(q);
+    const matchedActions = (tool.actions || []).filter(a =>
+      !q || a.title.toLowerCase().includes(q) || tool.name.toLowerCase().includes(q));
+
+    if (toolHit && !q) {
+      rows.push({ kind: "tool", tool, action: null, title: tool.name, sub: tool.description });
+    } else if (q) {
+      if (toolHit) {
+        rows.push({ kind: "tool", tool, action: null, title: tool.name, sub: tool.description });
+      }
+      for (const a of matchedActions) {
+        if (toolHit && a.id === "open") continue; // avoid duplicate of the tool row
+        rows.push({
+          kind: "action", tool, action: a,
+          title: a.title, sub: tool.name,
+        });
+      }
+    }
+  }
+  state.rows = rows;
+  if (state.sel >= rows.length) state.sel = Math.max(0, rows.length - 1);
+  render();
+}
+
+function render() {
+  $results.innerHTML = "";
+  if (!state.rows.length) {
+    const d = document.createElement("div");
+    d.className = "empty";
+    d.textContent = state.query ? "没有匹配的工具或功能" : "还没有可用工具";
+    $results.appendChild(d);
+    return;
+  }
+
+  if (state.query) {
+    const label = document.createElement("div");
+    label.className = "group-label";
+    label.textContent = `搜索结果 · ${state.rows.length}`;
+    $results.appendChild(label);
+  } else {
+    const label = document.createElement("div");
+    label.className = "group-label";
+    label.textContent = "全部工具";
+    $results.appendChild(label);
+  }
+
+  state.rows.forEach((r, i) => {
+    const row = document.createElement("div");
+    row.className = "row" + (i === state.sel ? " sel" : "");
+    row.dataset.index = String(i);
+
+    row.appendChild(rowIcon(r.tool));
+
+    const main = document.createElement("div");
+    main.className = "row-main";
+    const title = document.createElement("div");
+    title.className = "row-title";
+    title.textContent = r.title;
+    const sub = document.createElement("div");
+    sub.className = "row-sub";
+    sub.textContent = r.kind === "action" ? `功能 · ${r.tool.name}` : (r.sub || "");
+    main.append(title, sub);
+    row.appendChild(main);
+
+    if (r.kind === "action" && r.action.combo) {
+      const kbd = document.createElement("kbd");
+      kbd.textContent = r.action.combo;
+      row.appendChild(kbd);
+    } else if (r.tool.source === "installed") {
+      const badge = document.createElement("span");
+      badge.className = "row-badge";
+      badge.textContent = "第三方";
+      row.appendChild(badge);
+    }
+
+    row.addEventListener("mouseenter", () => { state.sel = i; paintSelection(); });
+    row.addEventListener("click", () => activate(i));
+    $results.appendChild(row);
+  });
+  scrollSelIntoView();
+}
+
+function paintSelection() {
+  const rows = $results.querySelectorAll(".row");
+  rows.forEach(el => el.classList.toggle("sel", Number(el.dataset.index) === state.sel));
+  scrollSelIntoView();
+}
+
+function scrollSelIntoView() {
+  const el = $results.querySelector(`.row[data-index="${state.sel}"]`);
+  if (el) el.scrollIntoView({ block: "nearest" });
+}
+
+async function activate(i) {
+  const r = state.rows[i];
+  if (!r) return;
+  await invoke("open_tool", { id: r.tool.id });
+  hidePanel();
+}
+
+function hidePanel() {
+  invoke("close_window", { label: "panel" });
+}
+
+async function load() {
+  try {
+    const s = await invoke("get_state");
+    state.tools = s.tools || [];
+    state.version = s.version || "";
+    $version.textContent = "v" + state.version;
+    buildRows();
+  } catch (e) {
+    $results.innerHTML = `<div class="empty">加载失败：${String(e)}</div>`;
+  }
+}
+
+// ------------------------------------------------------------------ events
+$search.addEventListener("input", () => {
+  state.query = $search.value;
+  state.sel = 0;
+  buildRows();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    if ($search.value) {
+      $search.value = "";
+      state.query = "";
+      state.sel = 0;
+      buildRows();
+    } else {
+      hidePanel();
+    }
+    e.preventDefault();
+    return;
+  }
+  if (e.key === "ArrowDown") {
+    state.sel = Math.min(state.sel + 1, state.rows.length - 1);
+    paintSelection();
+    e.preventDefault();
+  } else if (e.key === "ArrowUp") {
+    state.sel = Math.max(state.sel - 1, 0);
+    paintSelection();
+    e.preventDefault();
+  } else if (e.key === "Enter") {
+    activate(state.sel);
+    e.preventDefault();
+  }
+});
+
+document.querySelectorAll(".fbtn").forEach(btn => {
+  btn.addEventListener("click", async () => {
+    const act = btn.dataset.act;
+    if (act === "main") {
+      await invoke("open_main");
+      hidePanel();
+    } else if (act === "refresh") {
+      await load();
+    }
+  });
+});
+
+// focus search as soon as we appear
+window.addEventListener("focus", () => $search.focus());
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) { $search.focus(); $search.select(); }
+});
+
+$search.focus();
+load();
+</script>
+</body>
+</html>

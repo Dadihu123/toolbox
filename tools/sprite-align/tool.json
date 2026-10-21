@@ -1,0 +1,42 @@
+{
+  "manifestVersion": 1,
+  "bridgeVersion": 1,
+  "id": "sprite-align",
+  "name": "序列帧对齐",
+  "description": "切分 sprite sheet、识别帧内容、锚点对齐、导出 PNG / ZIP",
+  "version": "1.0.0",
+  "author": "yhmr",
+  "entry": "sprite-align.html",
+  "icon": "icon.svg",
+  "accent": "#4ea1ff",
+  "window": {
+    "width": 1360,
+    "height": 860,
+    "minWidth": 960,
+    "minHeight": 620
+  },
+  "permissions": {
+    "filesOpen": false,
+    "filesSave": true,
+    "clipboardRead": false,
+    "clipboardWrite": false,
+    "data": true,
+    "externalOpen": false,
+    "network": []
+  },
+  "actions": [
+    {
+      "id": "open",
+      "title": "打开序列帧对齐",
+      "defaultHotkey": "Ctrl+Alt+S",
+      "requiresOpen": false
+    },
+    {
+      "id": "export-zip",
+      "title": "导出为 ZIP",
+      "defaultHotkey": "Ctrl+Alt+E",
+      "requiresOpen": true
+    }
+  ],
+  "accepts": ["image/png", "image/webp", "image/jpeg"]
+}

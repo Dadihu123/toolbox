@@ -1,0 +1,5344 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sprite Align — 序列帧对齐工具</title>
+<style>
+    :root {
+        --bg: #14161a;
+        --bg-2: #1b1e24;
+        --bg-3: #22262e;
+        --line: #323844;
+        --line-soft: #272c36;
+        --fg: #dfe3ea;
+        --fg-dim: #98a1b0;
+        --fg-faint: #6b7484;
+        --accent: #4ea1ff;
+        --accent-dim: #2b6cb0;
+        --ok: #3ecf8e;
+        --warn: #e8b23a;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--fg);
+        font: 12px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+        user-select: none;
+    }
+    button, input, select { font: inherit; color: inherit; }
+    button {
+        background: var(--bg-3);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 4px 9px;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    button:hover:not(:disabled) { background: #2b313b; border-color: #3f4757; }
+    button:active:not(:disabled) { background: #171a20; }
+    button:disabled { opacity: .4; cursor: default; }
+    button.primary { background: var(--accent-dim); border-color: #3b82d6; color: #fff; }
+    button.primary:hover:not(:disabled) { background: #3579c8; }
+    input[type="number"], input[type="text"], select {
+        background: #10121699;
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 3px 5px;
+        width: 100%;
+        min-width: 0;
+    }
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+    input[type="checkbox"] { accent-color: var(--accent); }
+    input:focus, select:focus, button:focus-visible { outline: 1px solid var(--accent); outline-offset: 0; }
+
+    #app { display: flex; flex-direction: column; height: 100%; }
+    #topbar {
+        display: flex; align-items: center; gap: 8px;
+        padding: 6px 10px; background: var(--bg-2);
+        border-bottom: 1px solid var(--line); flex: 0 0 auto;
+    }
+    #topbar .brand { font-weight: 600; letter-spacing: .02em; }
+    #topbar .brand span { color: var(--fg-faint); font-weight: 400; margin-left: 6px; }
+    #topbar .spacer { flex: 1 1 auto; }
+    #main { flex: 1 1 auto; display: flex; min-height: 0; }
+    #left { width: 216px; flex: 0 0 auto; border-right: 1px solid var(--line); background: var(--bg-2); display: flex; flex-direction: column; min-height: 0; }
+    #center { flex: 1 1 auto; display: flex; flex-direction: column; min-width: 0; }
+    #right { width: 272px; flex: 0 0 auto; border-left: 1px solid var(--line); background: var(--bg-2); overflow: auto; }
+    #stageWrap { position: relative; flex: 1 1 auto; min-height: 0; background: #0f1114; }
+    #stageWrap canvas { display: block; width: 100%; height: 100%; }
+    #previewWrap { position: relative; height: 296px; flex: 0 0 auto; border-top: 1px solid var(--line); background: #0f1114; display: flex; min-height: 0; }
+    #previewCanvasBox { flex: 1 1 auto; position: relative; min-width: 0; }
+    #previewCanvasBox canvas { display: block; width: 100%; height: 100%; }
+    #previewSide { width: 212px; flex: 0 0 auto; border-left: 1px solid var(--line); background: var(--bg-2); display: flex; flex-direction: column; min-height: 0; }
+    #statusbar {
+        flex: 0 0 auto; padding: 3px 10px; background: var(--bg-2);
+        border-top: 1px solid var(--line); color: var(--fg-dim);
+        display: flex; gap: 14px; align-items: center;
+    }
+    #statusbar .grow { flex: 1 1 auto; }
+
+    .panel { border-bottom: 1px solid var(--line-soft); }
+    .panel > h3 {
+        margin: 0; padding: 6px 10px; font-size: 11px; font-weight: 600;
+        color: var(--fg-dim); text-transform: uppercase; letter-spacing: .06em;
+        background: #1e222a; display: flex; align-items: center; gap: 6px;
+    }
+    .panel > h3 .grow { flex: 1 1 auto; }
+    .panel .body { padding: 8px 10px; display: flex; flex-direction: column; gap: 7px; }
+    .row { display: flex; align-items: center; gap: 6px; }
+    .row > label { flex: 0 0 auto; color: var(--fg-dim); min-width: 54px; }
+    .row > .grow { flex: 1 1 auto; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 5px; }
+    .hint { color: var(--fg-faint); font-size: 11px; line-height: 1.45; }
+    .sep { height: 1px; background: var(--line-soft); margin: 2px 0; }
+
+    .list { overflow: auto; }
+    #srcList { flex: 0 0 auto; max-height: 170px; }
+    #blockList { flex: 1 1 auto; min-height: 0; }
+    .item {
+        display: flex; align-items: center; gap: 7px; padding: 4px 10px;
+        cursor: pointer; border-left: 2px solid transparent;
+    }
+    .item:hover { background: #232830; }
+    .item.sel { background: #24313f; border-left-color: var(--accent); }
+    .item .thumb {
+        width: 34px; height: 34px; flex: 0 0 auto; background: #191c21;
+        border: 1px solid var(--line); border-radius: 3px; object-fit: contain;
+        image-rendering: pixelated;
+    }
+    .item .meta { min-width: 0; flex: 1 1 auto; }
+    .item .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .item .sub { color: var(--fg-faint); font-size: 11px; }
+    .item .tag { color: var(--fg-faint); font-size: 10px; border: 1px solid var(--line); border-radius: 3px; padding: 0 3px; }
+    .item.off .name { color: var(--fg-faint); text-decoration: line-through; }
+    .chipgrid { display: flex; flex-wrap: wrap; gap: 4px; }
+    .chip {
+        display: flex; align-items: center; gap: 3px; border: 1px solid var(--line);
+        border-radius: 3px; padding: 1px 4px; cursor: pointer; background: #1a1d23;
+        font-size: 11px; color: var(--fg-dim);
+    }
+    .chip.on { border-color: var(--accent); color: var(--fg); background: #22303f; }
+    .chip.cur { box-shadow: 0 0 0 1px var(--accent) inset; }
+    .cutrow { display: flex; align-items: center; gap: 5px; }
+    .cutrow .idx { color: var(--fg-faint); width: 26px; flex: 0 0 auto; }
+    .cutrow input { flex: 1 1 auto; }
+    #cutList { max-height: 152px; overflow: auto; display: flex; flex-direction: column; gap: 4px; }
+
+    .overlaybar {
+        position: absolute; left: 8px; top: 8px; display: flex; gap: 6px; align-items: center;
+        background: #14161ad9; border: 1px solid var(--line); border-radius: 5px; padding: 4px 6px;
+        backdrop-filter: blur(3px); z-index: 3; flex-wrap: wrap; max-width: calc(100% - 16px);
+    }
+    .overlaybar .divider { width: 1px; height: 16px; background: var(--line); }
+    .overlaybar .lbl { color: var(--fg-faint); }
+    .badge { border: 1px solid var(--line); border-radius: 3px; padding: 0 4px; color: var(--fg-dim); }
+    #previewSide .body { padding: 7px 8px; gap: 6px; }
+    .prog { height: 4px; background: #2a2f38; border-radius: 2px; overflow: hidden; }
+    .prog > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .1s; }
+    body.drop-active #stageWrap { outline: 2px dashed var(--accent); outline-offset: -6px; }
+    .kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 3px; padding: 0 3px; color: var(--fg-dim); font-size: 10px; }
+    details.help > summary { cursor: pointer; color: var(--fg-dim); padding: 6px 10px; font-size: 11px; }
+    details.help .body { padding: 0 10px 10px; }
+</style>
+</head>
+<body>
+<div id="app">
+    <div id="topbar">
+        <div class="brand">Sprite Align<span>序列帧对齐 · 网格切分 / 锚点对齐 / 导出</span></div>
+        <div class="spacer"></div>
+        <button id="undoBtn" data-testid="top.undo" title="撤销（Ctrl+Z）">↶ 撤销</button>
+        <button id="redoBtn" data-testid="top.redo" title="重做（Ctrl+Y）">↷ 重做</button>
+        <button id="openBtn" class="primary" data-testid="top.open">打开图片…</button>
+        <button id="clearBtn" data-testid="top.clear" title="清空所有已导入图片">清空</button>
+        <span class="badge" id="srcBadge">0 张</span>
+        <span class="badge" id="blockBadge">0 块</span>
+    </div>
+
+    <div id="main">
+        <div id="left">
+            <div class="panel">
+                <h3>图片源<span class="grow"></span><span id="srcCount" class="badge">0</span></h3>
+                <div class="body" style="padding:6px 8px 2px">
+                    <div class="row">
+                        <label style="min-width:30px">排列</label>
+                        <select id="arrangeSel" class="grow" data-testid="src.arrange" title="多张图片在工作区里如何摆放。只影响工作区显示，不影响导出">
+                            <option value="v">纵向（上下）</option>
+                            <option value="h">横向（左右）</option>
+                            <option value="grid">网格</option>
+                        </select>
+                        <input type="number" id="arrangeCols" min="0" max="32" value="0" style="display:none;width:52px" title="网格列数，0 = 自动" />
+                    </div>
+                </div>
+                <div class="list" id="srcList" data-testid="left.src"></div>
+            </div>
+            <div class="panel" style="display:flex;flex-direction:column;min-height:0;flex:1 1 auto;border-bottom:none;">
+                <h3>帧 / 矩阵块<span class="grow"></span><span id="blockCount" class="badge">0</span></h3>
+                <div class="list" id="blockList" data-testid="left.block"></div>
+            </div>
+        </div>
+
+        <div id="center">
+            <div id="stageWrap">
+                <canvas id="stage" data-testid="stage.canvas"></canvas>
+                <div class="overlaybar">
+                    <span class="lbl">缩放</span>
+                    <span class="badge" id="zoomLabel">100%</span>
+                    <button id="zoomOut" data-testid="stage.zoom-out">−</button>
+                    <button id="zoomIn" data-testid="stage.zoom-in">+</button>
+                    <button id="fitBtn" data-testid="stage.fit">适应</button>
+                    <button id="zoom100" data-testid="stage.zoom-100">1:1</button>
+                    <div class="divider"></div>
+                    <span class="lbl">显示</span>
+                    <label class="chip" id="alignedChip" title="按当前对齐结果在各自格子内平移内容 —— 看到的就是导出的样子"><input type="checkbox" id="showAligned" data-testid="stage.aligned" />对齐后</label>
+                    <label class="chip" id="splitChip" title="左半屏画原图、右半屏画对齐后，同时看两边，位置一一对应"><input type="checkbox" id="showSplit" data-testid="stage.split" />分屏对比</label>
+                    <label class="chip" title="显示分割线"><input type="checkbox" id="showCuts" checked />分割线</label>
+                    <label class="chip" title="显示内容包围盒"><input type="checkbox" id="showBBox" checked />内容框</label>
+                    <label class="chip" title="显示锚点"><input type="checkbox" id="showAnchor" checked />锚点</label>
+                    <label class="chip" id="pivotChip" title="在每格里标出锚点最终要落到的位置（落点）"><input type="checkbox" id="showPivot" data-testid="stage.pivot" checked />落点</label>
+                    <label class="chip"><input type="checkbox" id="showIndex" checked />序号</label>
+                    <div class="divider"></div>
+                    <span class="lbl" id="cursorInfo">—</span>
+                </div>
+            </div>
+
+            <div id="previewWrap">
+                <div id="previewCanvasBox">
+                    <canvas id="preview" data-testid="preview.canvas"></canvas>
+                    <div class="overlaybar">
+                        <span class="lbl">重叠预览</span>
+                        <label class="chip"><input type="checkbox" id="previewRefOnly" />只看当前帧</label>
+                        <span class="lbl">全局透明度</span>
+                        <input type="range" id="previewOpacity" min="5" max="100" value="55" style="width:92px" />
+                        <span class="badge" id="previewOpacityVal">55%</span>
+                        <div class="divider"></div>
+                        <button id="playBtn" data-testid="preview.play">▶ 播放</button>
+                        <span class="lbl">fps</span>
+                        <input type="number" id="fpsInput" min="1" max="60" value="12" style="width:52px" />
+                        <div class="divider"></div>
+                        <button id="fitPreview" data-testid="preview.fit">适应</button>
+                    </div>
+                </div>
+                <div id="previewSide">
+                    <div class="panel" style="border-bottom:1px solid var(--line-soft)">
+                        <h3>参与重叠的帧</h3>
+                        <div class="body">
+                            <div class="chipgrid" id="previewChips" data-testid="preview.chips"></div>
+                            <div class="grid4">
+                                <button id="chipsAll" data-testid="preview.chips-all">全选</button>
+                                <button id="chipsNone" data-testid="preview.chips-none">全不选</button>
+                                <button id="chipsOdd" data-testid="preview.chips-odd" title="隔一个选一个，便于两帧对比">隔选</button>
+                                <button id="chipsSel" data-testid="preview.chips-sel">仅选中</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="panel" style="border-bottom:none;display:flex;flex-direction:column;min-height:0;flex:1 1 auto;">
+                        <h3>手动对齐（两块）</h3>
+                        <div class="body">
+                            <label class="chip" style="justify-content:flex-start">
+                                <input type="checkbox" id="manualOn" data-testid="manual.toggle" />启用手动拖动对齐
+                            </label>
+                            <div class="row"><label>拖动块</label><select id="manualMove" class="grow" data-testid="manual.move"></select></div>
+                            <div class="row"><label>基准块</label><select id="manualRef" class="grow" data-testid="manual.ref"></select></div>
+                            <div class="grid2">
+                                <button id="snapLeft" data-testid="manual.snap-left">左对齐</button>
+                                <button id="snapRight" data-testid="manual.snap-right">右对齐</button>
+                                <button id="snapCenterX" data-testid="manual.snap-centerx">水平居中</button>
+                                <button id="snapBottom" data-testid="manual.snap-bottom">底部对齐</button>
+                                <button id="snapTop" data-testid="manual.snap-top">顶部对齐</button>
+                                <button id="snapCenterY" data-testid="manual.snap-centery">垂直居中</button>
+                            </div>
+                            <button id="snapBoth" data-testid="manual.snap-pivot">锚点完全重合</button>
+                            <div class="hint">在预览里直接拖动「拖动块」的内容；靠近边缘 / 中线 / 锚点会自动吸附，吸附后另一轴保持不动，可以沿着对齐好的边左右滑。<br />按住 <span class="kbd">Alt</span> 拖动可临时关闭吸附。</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="right">
+            <div class="panel">
+                <h3>1 · 网格切分</h3>
+                <div class="body">
+                    <div class="hint" id="gridTarget">未选择图片源</div>
+                    <div class="row">
+                        <button id="autoGrid" class="primary grow" data-testid="grid.auto" title="扫描透明空档，自动推断行列（帧与帧之间的透明缝就是分割线该在的地方）">自动识别网格</button>
+                        <button id="autoGridAll" data-testid="grid.auto-all" title="对所有已导入的图片源都跑一次自动识别">全部识别</button>
+                    </div>
+                    <div class="row">
+                        <label>列 × 行</label>
+                        <input type="number" id="colsInput" min="1" max="64" value="4" />
+                        <span class="lbl">×</span>
+                        <input type="number" id="rowsInput" min="1" max="64" value="4" />
+                        <button id="applyGrid" data-testid="grid.apply">等分</button>
+                    </div>
+                    <div class="row">
+                        <label>格子尺寸</label>
+                        <input type="number" id="cellW" min="1" placeholder="w" />
+                        <span class="lbl">×</span>
+                        <input type="number" id="cellH" min="1" placeholder="h" />
+                        <button id="applyCell" data-testid="grid.apply-cell" title="按固定格子尺寸切分（不足一格的部分留在最后一块）">切分</button>
+                    </div>
+                    <div class="row">
+                        <button id="normCells" class="grow" data-testid="grid.normalize" title="把每个矩阵块的格子统一成「所有块里最大的宽 × 最大的高」。内容框和图案都不动，只是格子边框变大，于是各帧尺寸一致、能拼成合格的序列帧">归一化格子尺寸</button>
+                    </div>
+                    <div class="row">
+                        <label style="min-width:34px">帧尺寸</label>
+                        <select id="reEvenSize" data-testid="grid.reeven-size" class="grow" title="重新等分时用哪种帧画布尺寸">
+                            <option value="even">原图等分（源宽÷列数）</option>
+                            <option value="content">按最大内容尺寸</option>
+                        </select>
+                        <button id="reEven" data-testid="grid.reeven" title="把手动切出来的不等宽格子重新变回等分格，每帧内容跟着搬进新格子">重新等分</button>
+                    </div>
+                    <div class="hint" id="cellSizeWarn"></div>
+                    <div class="sep"></div>
+                    <div class="row">
+                        <label>分割线</label>
+                        <span class="badge" id="cutCount">X 0 / Y 0</span>
+                        <span class="grow"></span>
+                        <button id="clearCuts" data-testid="grid.clear-cuts">清除</button>
+                    </div>
+                    <div id="cutList" data-testid="grid.cuts"></div>
+                    <div class="hint">画布上双击画面添加纵向分割线（按住 <span class="kbd">Shift</span> 双击加横向），拖动分割线微调，右键分割线删除。下面可以输入精确坐标。</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>2 · 锚点与内容识别</h3>
+                <div class="body">
+                    <div class="row">
+                        <label>锚点</label>
+                        <select id="anchorPreset" class="grow" data-testid="anchor.preset"></select>
+                    </div>
+                    <div class="row">
+                        <label>偏移 px</label>
+                        <input type="number" id="anchorOx" value="0" step="1" title="锚点的像素偏移 X" />
+                        <input type="number" id="anchorOy" value="0" step="1" title="锚点的像素偏移 Y" />
+                    </div>
+                    <div class="hint">锚点定义在「内容包围盒」上（底部中心 = 脚底着地点）。对齐后所有帧的锚点会落在同一个像素位置。</div>
+                    <div class="sep"></div>
+                    <div class="row">
+                        <label>内容识别</label>
+                        <span class="grow"></span>
+                        <button id="redetectAll" data-testid="detect.all" title="连手动调过的内容框一起重算">全部重检</button>
+                    </div>
+                    <div class="row">
+                        <label>alpha 阈值</label>
+                        <input type="range" id="threshold" min="0" max="254" value="8" />
+                        <span class="badge" id="thresholdVal">8</span>
+                    </div>
+                    <div class="hint">逐块扫描透明通道得到内容包围盒：alpha 大于阈值的像素才算内容。阈值调高可以吃掉抗锯齿产生的淡淡边缘。</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>3 · 对齐</h3>
+                <div class="body">
+                    <div class="row">
+                        <label>落点</label>
+                        <select id="pivotMode" class="grow" data-testid="align.pivot-mode">
+                            <option value="baseline">基准块的锚点位置</option>
+                            <option value="median">全体中位数（位置居中，不是格子居中）</option>
+                            <option value="cell">格子内指定位置（可一键让内容居中）</option>
+                            <option value="none">不对齐（保持原位置）</option>
+                        </select>
+                    </div>
+                    <div id="baselineRow" class="row">
+                        <label>基准块</label>
+                        <select id="baselineSel" class="grow" data-testid="align.baseline"></select>
+                    </div>
+                    <div id="pivotCellRow" class="row" style="display:none">
+                        <label>落点 XY</label>
+                        <input type="number" id="pivotCellX" step="1" title="落点在格子内的 X" />
+                        <input type="number" id="pivotCellY" step="1" title="落点在格子内的 Y" />
+                    </div>
+                    <div class="row">
+                        <label style="min-width:34px">居中</label>
+                        <select id="centerAxis" class="grow" data-testid="align.center-axis" title="选「水平」时只让 X 居中、Y 保持当前锚点高度 —— 脚底锚点配水平居中，可以让脚在同一条水平线上、人物水平居中">
+                            <option value="both">水平 + 垂直（都居中）</option>
+                            <option value="x">仅水平居中</option>
+                            <option value="y">仅垂直居中</option>
+                        </select>
+                        <button id="pivotCellCenter" data-testid="align.pivot-center" title="切到「格子内指定位置」并把落点设到格子相应的居中位置">居中</button>
+                    </div>
+                    <div id="pivotHint" class="hint"></div>
+                    <div class="row">
+                        <button id="autoBaseline" class="grow" data-testid="align.auto-baseline" title="挑一个位置最居中的块作为基准">自动挑基准</button>
+                        <button id="realignAll" class="primary grow" data-testid="align.realign">重新对齐</button>
+                    </div>
+                    <div class="hint">锚点要落到哪个像素，由「落点」决定；「基准块」只在落点选择「基准块的锚点位置」时起作用 —— 那时基准帧完全不动，其余帧向它靠拢。<br />选「全体中位数」或「格子内指定位置」时所有帧都会移动，基准块不参与运算，所以会被自动置灰。<br /><b>想让每帧内容都落在自己格子正中间</b>：锚点选「内容框中心」，落点选「格子内指定位置」，再点「图案居中到格子」。</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>4 · 选中块</h3>
+                <div class="body">
+                    <div class="hint" id="selInfo">未选中</div>
+                    <div class="grid2">
+                        <div class="row"><label style="min-width:14px">X</label><input type="number" id="bboxX" step="1" /></div>
+                        <div class="row"><label style="min-width:14px">Y</label><input type="number" id="bboxY" step="1" /></div>
+                        <div class="row"><label style="min-width:14px">W</label><input type="number" id="bboxW" step="1" /></div>
+                        <div class="row"><label style="min-width:14px">H</label><input type="number" id="bboxH" step="1" /></div>
+                    </div>
+                    <div class="row">
+                        <label>偏移 px</label>
+                        <input type="number" id="offX" step="1" />
+                        <input type="number" id="offY" step="1" />
+                    </div>
+                    <div class="row">
+                        <label>透明度</label>
+                        <input type="range" id="blockOpacity" min="5" max="100" value="100" />
+                        <span class="badge" id="blockOpacityVal">100%</span>
+                    </div>
+                    <div class="grid2">
+                        <button id="blockAuto" data-testid="block.mode-auto">偏移=自动</button>
+                        <button id="blockManual" data-testid="block.mode-manual">偏移=手动</button>
+                    </div>
+                    <div class="grid2">
+                        <button id="bboxAuto" data-testid="block.bbox-auto">内容框=自动</button>
+                        <button id="redetectSel" data-testid="block.redetect">重检此块</button>
+                    </div>
+                    <div class="grid2">
+                        <button id="includeToggle" data-testid="block.include">参与导出</button>
+                        <button id="centerSel" data-testid="block.center" title="让这一块的图案在自己格子内居中（会把该块转为手动偏移，重新对齐时不再被自动改动）">本块居中到格子</button>
+                    </div>
+                    <div class="grid2">
+                        <button id="lassoBtn" data-testid="block.lasso" title="用多边形圈出这一帧真正要保留的像素 —— 图案和隔壁帧交叠时用它切开">多边形套索</button>
+                        <button id="lassoClear" data-testid="block.lasso-clear" title="清除这一块的多边形遮罩，恢复成整格矩形">清除遮罩</button>
+                    </div>
+                    <div class="hint">方向键微调内容框 1px，<span class="kbd">Shift</span>+方向键 10px。拖动内容框内部移动，拖四角缩放。</div>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>5 · 导出</h3>
+                <div class="body">
+                    <div class="row">
+                        <label>帧画布</label>
+                        <select id="frameMode" class="grow" data-testid="export.frame-mode">
+                            <option value="cell">原格子尺寸（保持原分辨率）</option>
+                            <option value="tight">裁到内容（紧凑，分辨率会变小）</option>
+                        </select>
+                    </div>
+                    <div class="row">
+                        <label>留白 px</label>
+                        <input type="number" id="padInput" min="0" max="256" value="0" />
+                        <label style="min-width:30px">放大</label>
+                        <select id="scaleSel">
+                            <option value="1">1×</option>
+                            <option value="2">2×</option>
+                            <option value="3">3×</option>
+                            <option value="4">4×</option>
+                        </select>
+                    </div>
+                    <div id="pivotInfo" class="hint">—</div>
+                    <div id="clipWarn" class="hint"></div>
+                    <button id="exportFrames" class="primary" data-testid="export.frames">导出序列帧 PNG（ZIP）</button>
+                    <div class="row">
+                        <label>网格列数</label>
+                        <input type="number" id="sheetCols" min="1" max="64" value="8" />
+                        <button id="exportSheet" data-testid="export.sheet">导出网格图</button>
+                    </div>
+                    <div class="grid2">
+                        <button id="exportJson" data-testid="export.json">导出参数 JSON</button>
+                        <button id="exportOverlay" data-testid="export.overlay">导出对照图</button>
+                    </div>
+                    <div class="prog" id="progWrap" style="display:none"><i id="progBar"></i></div>
+                    <div class="hint" id="exportHint">「原格子尺寸」下所有帧的画布 = 原格子大小，网格图导出后与原图分辨率一致，可以直接替换原文件；锚点在每帧里位于同一像素，播放时不抖。</div>
+                </div>
+            </div>
+
+            <details class="help">
+                <summary>操作说明 / 快捷键</summary>
+                <div class="body hint">
+                    · 画布：滚轮缩放，中键或 <span class="kbd">空格</span>+拖动平移，双击加分割线，右键分割线删除<br />
+                    · 选中块后拖内容框移动、拖角缩放；方向键微调<br />
+                    · 预览区：勾「启用手动拖动对齐」，选好两块后直接拖动，吸附时另一轴保持不动<br />
+                    · <span class="kbd">F</span> 适应窗口，<span class="kbd">1</span> 1:1，<span class="kbd">Ctrl</span>+<span class="kbd">Z</span> 撤销<br />
+                    · 也可以直接把图片文件拖进窗口
+                </div>
+            </details>
+        </div>
+    </div>
+
+    <div id="statusbar">
+        <span id="status">就绪</span>
+        <span class="grow"></span>
+        <span id="detectInfo"></span>
+    </div>
+</div>
+
+<input type="file" id="fileInput" accept="image/*" multiple style="display:none" />
+
+<script>
+"use strict";
+/* ==== CORE:BEGIN ==== */
+/* 纯逻辑区：不触碰 DOM，可被 selftest.mjs 抽出后在 Node 中直接测试。 */
+
+/** 数值夹取 */
+function clamp(v, lo, hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+/** 四舍五入到整数像素 */
+function rint(v) { return Math.round(v); }
+
+/** 自然顺序比较：frame_2.png < frame_10.png */
+function naturalCompare(a, b) {
+    const ra = String(a).match(/(\d+|\D+)/g) || [];
+    const rb = String(b).match(/(\d+|\D+)/g) || [];
+    const n = Math.min(ra.length, rb.length);
+    for (let i = 0; i < n; i += 1) {
+        const x = ra[i];
+        const y = rb[i];
+        const nx = /^\d/.test(x);
+        const ny = /^\d/.test(y);
+        if (nx && ny) {
+            const d = parseInt(x, 10) - parseInt(y, 10);
+            if (d !== 0) return d < 0 ? -1 : 1;
+            if (x.length !== y.length) return x.length < y.length ? -1 : 1;
+        } else if (x !== y) {
+            return x < y ? -1 : 1;
+        }
+    }
+    return ra.length - rb.length;
+}
+
+/**
+ * 分割线去重 / 排序。
+ * 只接受落在图像内部的整数（1..size-1）：图像边界本身隐含，不需要用户维护，
+ * 所以 0 与 size 这类值直接丢弃，而不是夹到边上凭空多出一条贴着边的线。
+ */
+function sanitizeCuts(cuts, size) {
+    const out = [];
+    if (!Number.isFinite(size) || size < 2) return out;
+    for (const raw of cuts) {
+        if (!Number.isFinite(raw)) continue;
+        const v = rint(raw);
+        if (v < 1 || v > size - 1) continue;
+        if (out.indexOf(v) === -1) out.push(v);
+    }
+    out.sort(function (a, b) { return a - b; });
+    return out;
+}
+
+/** 由分割线展开出的矩阵块（源图像素坐标，row/col 从 0 起） */
+function computeSheetBlocks(width, height, cutsX, cutsY) {
+    const xs = [0].concat(sanitizeCuts(cutsX, width), [width]);
+    const ys = [0].concat(sanitizeCuts(cutsY, height), [height]);
+    const blocks = [];
+    for (let r = 0; r < ys.length - 1; r += 1) {
+        for (let c = 0; c < xs.length - 1; c += 1) {
+            const sw = xs[c + 1] - xs[c];
+            const sh = ys[r + 1] - ys[r];
+            if (sw < 1 || sh < 1) continue;
+            blocks.push({ row: r, col: c, sx: xs[c], sy: ys[r], sw: sw, sh: sh });
+        }
+    }
+    return blocks;
+}
+
+/** 等分分割线（count 列 → count-1 条） */
+function evenCuts(size, count) {
+    const cuts = [];
+    const n = Math.max(1, rint(count));
+    for (let i = 1; i < n; i += 1) cuts.push(rint(size * i / n));
+    return sanitizeCuts(cuts, size);
+}
+
+/** 按固定格子尺寸生成分割线 */
+function fixedCuts(size, cell) {
+    const cuts = [];
+    const step = rint(cell);
+    if (!(step > 0)) return cuts;
+    for (let v = step; v < size; v += step) cuts.push(v);
+    return sanitizeCuts(cuts, size);
+}
+
+/* ---------- 网格自动识别 ---------- */
+
+/**
+ * 统计每一列（axis="x"）或每一行（axis="y"）有多少个不透明像素。
+ *
+ * 这是自动识别网格的基础「墨水剖面」：帧与帧之间通常是一条透明带，
+ * 在那里墨水会掉到接近 0，于是剖面上的低谷就是分割线的位置。
+ */
+function computeInkProfile(data, width, height, axis, threshold) {
+    const t = clamp(rint(threshold), 0, 255);
+    const n = axis === "y" ? height : width;
+    const profile = new Array(n).fill(0);
+    if (axis === "y") {
+        for (let y = 0; y < height; y += 1) {
+            const rowOff = y * width * 4;
+            let c = 0;
+            for (let x = 0; x < width; x += 1) {
+                if (data[rowOff + x * 4 + 3] > t) c += 1;
+            }
+            profile[y] = c;
+        }
+    } else {
+        for (let y = 0; y < height; y += 1) {
+            const rowOff = y * width * 4;
+            for (let x = 0; x < width; x += 1) {
+                if (data[rowOff + x * 4 + 3] > t) profile[x] += 1;
+            }
+        }
+    }
+    return profile;
+}
+
+/**
+ * 在墨水剖面里找「透明空档」的中点，作为分割线。
+ *
+ * - 只认完全（或几乎完全）透明的连续区间：真正的 gutter 通常是 0 墨水
+ * - 忽略紧贴两端的空档：那是图像外边距，不是帧与帧之间的分隔
+ * - 空档太宽时取中点；太窄（1px）也认，很多导出的 sheet 只留 1px 缝
+ *
+ * 返回 { cuts, gutterWidths }；找不到空档时 cuts 为空数组。
+ */
+function findGutterCuts(profile, size, opts) {
+    const o = opts || {};
+    const tol = o.tolerance == null ? 2 : o.tolerance;
+    const cuts = [];
+    const gutterWidths = [];
+    let total = 0;
+    for (let i = 0; i < size; i += 1) total += profile[i];
+    // 整张图都是空的：没有意义
+    if (total <= 0) return { cuts: cuts, gutterWidths: gutterWidths };
+
+    const isEmpty = (i) => profile[i] <= tol;
+    let i = 0;
+    while (i < size) {
+        if (!isEmpty(i)) { i += 1; continue; }
+        let j = i;
+        while (j + 1 < size && isEmpty(j + 1)) j += 1;
+        // [i, j] 是一段空档
+        const touchesStart = i === 0;
+        const touchesEnd = j === size - 1;
+        if (!touchesStart && !touchesEnd) {
+            const center = rint((i + j) / 2);
+            if (center >= 1 && center <= size - 1) {
+                cuts.push(center);
+                gutterWidths.push(j - i + 1);
+            }
+        }
+        i = j + 1;
+    }
+    return { cuts: cuts, gutterWidths: gutterWidths };
+}
+
+/**
+ * 给「把 size 均分成 cells 份」这个假设打分。
+ *
+ * 分数 = 各条分割线处的平均墨水 / 全局平均墨水。
+ * 越小说明分割线越落在空白处，假设越可信（完美 gutter 时接近 0）。
+ */
+function scoreDivision(profile, size, cells) {
+    if (!(cells >= 2) || size < cells) return Number.POSITIVE_INFINITY;
+    let total = 0;
+    for (let i = 0; i < size; i += 1) total += profile[i];
+    if (total <= 0) return Number.POSITIVE_INFINITY;
+    const mean = total / size;
+
+    let sum = 0;
+    for (let k = 1; k < cells; k += 1) {
+        const at = rint(size * k / cells);
+        // 允许 ±1 的偏差：切割位置常常和真正的空档差一个像素
+        let best = Number.POSITIVE_INFINITY;
+        for (let d = -1; d <= 1; d += 1) {
+            const idx = at + d;
+            if (idx >= 0 && idx < size && profile[idx] < best) best = profile[idx];
+        }
+        sum += best;
+    }
+    return (sum / (cells - 1)) / mean;
+}
+
+/**
+ * 均分成 cells 份之后，最「空」的那一格含有多少墨水（相对平均每格的墨水）。
+ *
+ * 用来挡住过度切分：如果某个切法切出来的格子里几乎什么都没有，
+ * 那多半是把一帧从中间切开了 —— 空白区域被切成了独立的「格子」。
+ * 返回 0..1，越接近 1 说明每格内容越均匀。
+ */
+function minCellInkRatio(profile, size, cells) {
+    if (!(cells >= 1) || size < cells) return 0;
+    let total = 0;
+    for (let i = 0; i < size; i += 1) total += profile[i];
+    if (total <= 0) return 0;
+    const meanCell = total / cells;
+
+    let minCell = Number.POSITIVE_INFINITY;
+    for (let k = 0; k < cells; k += 1) {
+        const from = rint(size * k / cells);
+        const to = k === cells - 1 ? size : rint(size * (k + 1) / cells);
+        let sum = 0;
+        for (let i = from; i < to; i += 1) sum += profile[i];
+        if (sum < minCell) minCell = sum;
+    }
+    return meanCell > 0 ? clamp(minCell / meanCell, 0, 1) : 0;
+}
+
+/**
+ * 自动识别一个方向的网格。
+ *
+ * 关键认识：sprite sheet 的「格子」是固定槽位，而每帧内容在槽位里是偏移的
+ * （这正是要修的问题）。所以帧与帧之间的透明缝**不在**槽位边界上 ——
+ * 直接拿空档位置当分割线，切出来的「格子」会跟着内容走，尺寸还不规则。
+ *
+ * 因此主判据是「有几格」而不是「缝在哪」：
+ *   在所有等分方案里，取**满足下面两条的最大格数**：
+ *     · 每条切割线都落在透明空档里（不切开任何帧）
+ *     · 每个格子里都有像样的内容（没把空白切成独立格子）
+ *   最大格数很关键：4 格的图用 2 格切也合法（切在中间的缝上），
+ *   但那样一格里装了两帧；而 8 格切法会把刀切进内容里，被第一条挡掉。
+ *
+ * 没有任何空档可依（帧挨着帧）时，退回「切得最干净的等分」。
+ *
+ * 返回 { cuts, cells, method, confidence, gutters, evenCuts }
+ *   method: "gutter" | "even" | "none"
+ *   gutters: 识别到的空档中心（仅作参考展示，不直接用它们切）
+ */
+function detectGridAxis(profile, size, maxCells) {
+    const maxC = clamp(rint(maxCells || 32), 2, 64);
+    let total = 0;
+    for (let i = 0; i < size; i += 1) total += profile[i];
+    const gutter = findGutterCuts(profile, size);
+
+    if (total <= 0) {
+        return {
+            cuts: [], cells: 1, method: "none", confidence: 0,
+            gutters: [], evenCuts: []
+        };
+    }
+    const mean = total / size;
+    // 判定「这一列基本是空的」的门槛：远低于平均墨水量
+    const emptyLimit = mean * 0.25;
+
+    const cutIsEmpty = (at) => {
+        for (let d = -1; d <= 1; d += 1) {
+            const idx = at + d;
+            if (idx >= 0 && idx < size && profile[idx] <= emptyLimit) return true;
+        }
+        return false;
+    };
+
+    // 取满足条件里格数最大的那个
+    let bestCells = 0;
+    for (let c = 2; c <= maxC; c += 1) {
+        if (size / c < 3) break;
+        const cuts = evenCuts(size, c);
+        if (cuts.length !== c - 1) continue;
+        let ok = true;
+        for (const at of cuts) {
+            if (!cutIsEmpty(at)) { ok = false; break; }
+        }
+        if (!ok) continue;
+        if (minCellInkRatio(profile, size, c) < 0.45) continue;
+        bestCells = c;
+    }
+
+    if (bestCells >= 2) {
+        // 空档越干净、每格内容越饱满，置信度越高
+        let inkInGutters = 0;
+        if (gutter.cuts.length > 0) {
+            for (const g of gutter.cuts) inkInGutters += profile[g];
+            inkInGutters /= gutter.cuts.length;
+        }
+        const cleanliness = 1 - clamp(inkInGutters / mean, 0, 1);
+        return {
+            cuts: evenCuts(size, bestCells),
+            cells: bestCells,
+            method: gutter.cuts.length > 0 ? "gutter" : "even",
+            confidence: clamp(0.6 + cleanliness * 0.4, 0, 1),
+            gutters: gutter.cuts,
+            evenCuts: evenCuts(size, bestCells)
+        };
+    }
+
+    // 没有可用空档：找切得最干净的等分
+    let fallback = null;
+    for (let c = 2; c <= maxC; c += 1) {
+        if (size / c < 3) break;
+        const score = scoreDivision(profile, size, c);
+        if (!Number.isFinite(score)) continue;
+        if (minCellInkRatio(profile, size, c) < 0.45) continue;
+        if (!fallback || score < fallback.score - 0.02 ||
+            (Math.abs(score - fallback.score) <= 0.02 && c > fallback.cells)) {
+            fallback = { cells: c, score: score };
+        }
+    }
+    if (fallback && fallback.score <= 0.5) {
+        return {
+            cuts: evenCuts(size, fallback.cells),
+            cells: fallback.cells,
+            method: "even",
+            confidence: clamp(1 - fallback.score, 0, 1),
+            gutters: gutter.cuts,
+            evenCuts: evenCuts(size, fallback.cells)
+        };
+    }
+
+    // 最后退路：格子本身确实不等宽（等分怎么切都会切进内容）时，
+    // 用真实空档位置切 —— 不完美，但比"识别不出来"有用，
+    // 而且状态栏会说明这是按空档切的、可以手动再调。
+    if (gutter.cuts.length > 0) {
+        return {
+            cuts: gutter.cuts.slice(),
+            cells: gutter.cuts.length + 1,
+            method: "gutter-raw",
+            confidence: 0.35,
+            gutters: gutter.cuts,
+            evenCuts: evenCuts(size, gutter.cuts.length + 1)
+        };
+    }
+    return {
+        cuts: [], cells: 1, method: "none", confidence: 0,
+        gutters: gutter.cuts, evenCuts: []
+    };
+}
+
+/**
+ * 「重新等分并归位」的纯计算部分。
+ *
+ * 场景：图是一次生成的，各帧没落在等分格里。用户用手动分割线把每帧内容
+ * 切开了，但格子因此不等宽。此函数把格子重新变成等分格，
+ * 同时让每帧的内容「跟着走」—— 做法是给每个块记一个 crop（内容原来在哪），
+ * 等分格负责"帧槽位"，crop 负责"像素从哪来"。
+ *
+ * 入参：
+ *   blocks  —— [{ id, row, col, sx, sy, sw, sh, bbox, include }]，bbox 相对旧格子
+ *   srcW/srcH —— 该源的像素尺寸
+ *   cols/rows —— 等分格数
+ *   opts.cellW/cellH —— 指定的等分格尺寸；省略则用 srcW/cols、srcH/rows
+ *
+ * 返回 { cellW, cellH, blocks: [{ id, sx, sy, sw, sh, crop, bbox }] }
+ *   bbox 已换算成「相对 crop 左上角」。
+ */
+function computeReEvenPlan(blocks, srcW, srcH, cols, rows, opts) {
+    const o = opts || {};
+    const c = Math.max(1, rint(cols));
+    const r = Math.max(1, rint(rows));
+    const cellW = Math.max(1, rint(o.cellW || Math.floor(srcW / c)));
+    const cellH = Math.max(1, rint(o.cellH || Math.floor(srcH / r)));
+
+    const list = (blocks || []).filter(function (b) { return b && b.include !== false; });
+
+    return {
+        cellW: cellW,
+        cellH: cellH,
+        blocks: list.map(function (b) {
+            const col = clamp(b.col || 0, 0, c - 1);
+            const row = clamp(b.row || 0, 0, r - 1);
+            const newSx = col * cellW;
+            const newSy = row * cellH;
+            // 内容原来在哪：旧格子原点 + 内容框（套索后内容框已按遮罩收窄，
+            // 所以 crop 正好框住套索圈出来的图案）
+            const cur = b.crop || { x: b.sx, y: b.sy, w: b.sw, h: b.sh };
+            const crop = b.bbox
+                ? { x: cur.x + b.bbox.x, y: cur.y + b.bbox.y, w: b.bbox.w, h: b.bbox.h }
+                : { x: cur.x, y: cur.y, w: cur.w, h: cur.h };
+            return {
+                id: b.id,
+                sx: newSx,
+                sy: newSy,
+                sw: cellW,
+                sh: cellH,
+                crop: b.bbox ? crop : null,
+                // bbox 换算成相对 crop 左上角 → 内容在新格子里就锚在 crop 原点
+                bbox: b.bbox ? { x: 0, y: 0, w: b.bbox.w, h: b.bbox.h } : null
+            };
+        })
+    };
+}
+
+/**
+ * 一组矩阵块里最大的格子宽高 —— 归一化的目标尺寸。
+ *
+ * 多张图片尺寸不一时，各块 sw/sh 不同会带来三个实际问题：
+ *   1. 内容框拖拽被各自的格子夹住（小格子只能在小范围里挪）
+ *   2. 工作区里的格子边框参差不齐，很难判断对齐情况
+ *   3. 导出时每帧的源矩形大小不同，边缘处理不一致
+ * 统一成最大宽高即可消除这些差异。
+ */
+function computeMaxCell(blocks) {
+    let w = 0;
+    let h = 0;
+    for (const b of blocks) {
+        if (!b || b.bbox == null) continue;
+        if (b.include === false) continue;
+        if (b.sw > w) w = b.sw;
+        if (b.sh > h) h = b.sh;
+    }
+    return { w: Math.max(1, w), h: Math.max(1, h) };
+}
+
+/** 各块格子尺寸是否已经完全一致（一致就不必归一化） */
+function cellsAreUniform(blocks) {
+    const list = (blocks || []).filter(function (b) { return b && b.bbox != null && b.include !== false; });
+    if (list.length <= 1) return true;
+    const w = list[0].sw;
+    const h = list[0].sh;
+    for (const b of list) {
+        if (b.sw !== w || b.sh !== h) return false;
+    }
+    return true;
+}
+
+/**
+ * 计算归一化后的块几何：格子统一成 maxW × maxH，
+ * **sx / sy / 内容框 / 图案全部保持不动**，只是格子边框向右下扩展。
+ *
+ * 返回 [{ id, sx, sy, sw, sh }]，供调用方写回。
+ */
+function computeNormalizedCells(blocks) {
+    const max = computeMaxCell(blocks);
+    return (blocks || []).map(function (b) {
+        return {
+            id: b.id,
+            sx: b.sx,
+            sy: b.sy,
+            sw: max.w,
+            sh: max.h
+        };
+    });
+}
+
+/**
+ * 从多个图片源在工作区里排开。
+ *
+ * sizes: [{ id, width, height, slotW?, slotH? }]，按显示顺序
+ * opts:
+ *   arrange  —— "v" 纵向（默认）/ "h" 横向 / "grid" 网格
+ *   cols     —— grid 模式的列数（0 或省略 = 自动，按 √n 向上取整）
+ *   gap      —— 源与源之间的间距（默认 26）
+ *
+ * slotW/slotH 是「这个源在工作区里占多大地方」，省略时等于 width/height。
+ * 归一化格子尺寸后，单帧源的格子可能比图片本身更宽（要补到最大格），
+ * 那时必须按格子占位来排版 —— 否则格子边框会伸进隔壁源里，看起来像"叠在一起"。
+ *
+ * 返回 { items: [{id, x, y}], width, height, cols }
+ *
+ * 横向时按顶边对齐（y=0），纵向时按左边对齐（x=0）：
+ * 处理多张独立帧文件时它们通常同尺寸，对齐哪边都一样；
+ * 真遇到尺寸不一的，左/顶对齐比居中更利于数序号。
+ */
+function computeSourceLayout(sizes, opts) {
+    const o = opts || {};
+    const gap = o.gap == null ? 26 : Math.max(0, rint(o.gap));
+    const arrange = (o.arrange === "h" || o.arrange === "grid") ? o.arrange : "v";
+    const list = Array.isArray(sizes) ? sizes : [];
+    if (list.length === 0) return { items: [], width: 1, height: 1, cols: 0 };
+
+    // 占位尺寸：格子比图片大时按格子算，避免格子边框溢出到隔壁
+    const wOf = function (s) { return Math.max(1, rint(s && s.slotW != null ? s.slotW : s.width) || 1); };
+    const hOf = function (s) { return Math.max(1, rint(s && s.slotH != null ? s.slotH : s.height) || 1); };
+
+    const items = [];
+
+    if (arrange === "v") {
+        let y = 0;
+        let maxW = 0;
+        for (const s of list) {
+            const w = wOf(s);
+            const h = hOf(s);
+            items.push({ id: s.id, x: 0, y: y });
+            y += h + gap;
+            if (w > maxW) maxW = w;
+        }
+        return {
+            items: items,
+            width: Math.max(1, maxW),
+            height: Math.max(1, y - gap),
+            cols: 1
+        };
+    }
+
+    if (arrange === "h") {
+        let x = 0;
+        let maxH = 0;
+        for (const s of list) {
+            const w = wOf(s);
+            const h = hOf(s);
+            items.push({ id: s.id, x: x, y: 0 });
+            x += w + gap;
+            if (h > maxH) maxH = h;
+        }
+        return {
+            items: items,
+            width: Math.max(1, x - gap),
+            height: Math.max(1, maxH),
+            cols: list.length
+        };
+    }
+
+    // grid：先按列数分成若干行，行高取该行最高者，列宽取该列最宽者
+    let cols = rint(o.cols || 0);
+    if (!(cols > 0)) cols = Math.max(1, Math.ceil(Math.sqrt(list.length)));
+    cols = Math.min(cols, list.length);
+
+    const rows = Math.ceil(list.length / cols);
+    const colW = new Array(cols).fill(0);
+    const rowH = new Array(rows).fill(0);
+    list.forEach(function (s, i) {
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        const w = wOf(s);
+        const h = hOf(s);
+        if (w > colW[c]) colW[c] = w;
+        if (h > rowH[r]) rowH[r] = h;
+    });
+
+    const colX = [];
+    let accX = 0;
+    for (let c = 0; c < cols; c += 1) { colX.push(accX); accX += colW[c] + gap; }
+    const rowY = [];
+    let accY = 0;
+    for (let r = 0; r < rows; r += 1) { rowY.push(accY); accY += rowH[r] + gap; }
+
+    list.forEach(function (s, i) {
+        const c = i % cols;
+        const r = Math.floor(i / cols);
+        items.push({ id: s.id, x: colX[c], y: rowY[r] });
+    });
+
+    return {
+        items: items,
+        width: Math.max(1, accX - gap),
+        height: Math.max(1, accY - gap),
+        cols: cols
+    };
+}
+
+/**
+ * 在 RGBA 数据中扫描 alpha > threshold 的包围盒。
+ * 返回的坐标相对数据自身（也就是相对该矩阵块左上角）。全透明返回 null。
+ */
+function detectAlphaBBox(data, width, height, threshold) {
+    const t = clamp(rint(threshold), 0, 255);
+    let minX = width;
+    let minY = height;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < height; y += 1) {
+        const rowOff = y * width * 4;
+        let hit = false;
+        for (let x = 0; x < width; x += 1) {
+            if (data[rowOff + x * 4 + 3] > t) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+                hit = true;
+            }
+        }
+        if (hit) {
+            if (y < minY) minY = y;
+            maxY = y;
+        }
+    }
+    if (maxX < 0) return null;
+    return { x: minX, y: minY, w: maxX - minX + 1, h: maxY - minY + 1 };
+}
+
+/**
+ * 内容底部接触带：内容框最下面 ratio 高度里，所有不透明像素的 x 范围。
+ * 用来求「脚底中心」——上半身摆动（抬手、扭头）不会带着它一起跑，
+ * 比整个内容框的中心稳得多。返回块内局部坐标，取不到返回 null。
+ */
+function detectFootBand(data, width, height, bbox, threshold, ratio) {
+    if (!bbox) return null;
+    const t = clamp(rint(threshold), 0, 255);
+    const r = ratio == null ? 0.12 : ratio;
+    const bandH = Math.max(1, rint(bbox.h * r));
+    const y0 = Math.max(0, bbox.y + bbox.h - bandH);
+    const y1 = Math.min(height, bbox.y + bbox.h);
+    let minX = width;
+    let maxX = -1;
+    for (let y = y0; y < y1; y += 1) {
+        const rowOff = y * width * 4;
+        for (let x = bbox.x; x < bbox.x + bbox.w; x += 1) {
+            if (data[rowOff + x * 4 + 3] > t) {
+                if (x < minX) minX = x;
+                if (x > maxX) maxX = x;
+            }
+        }
+    }
+    if (maxX < 0) return null;
+    return { x0: minX, x1: maxX };
+}
+
+/** 锚点预设：归一化坐标 (0..1) 落在内容包围盒内。 */
+/**
+ * 锚点预设：归一化坐标 (0..1) 落在内容包围盒内。
+ * ax === null 表示「按每块自己算」（目前只有脚底中心用得到）。
+ */
+var ANCHOR_PRESETS = [
+    { id: "foot-center", label: "脚底接触点中心（推荐，抗上半身摆动）", ax: null, ay: 1 },
+    { id: "bottom-center", label: "内容框底部中心", ax: 0.5, ay: 1 },
+    { id: "bottom-left", label: "内容框左下角", ax: 0, ay: 1 },
+    { id: "bottom-right", label: "内容框右下角", ax: 1, ay: 1 },
+    { id: "center", label: "内容框中心", ax: 0.5, ay: 0.5 },
+    { id: "top-center", label: "内容框顶部中心（头顶）", ax: 0.5, ay: 0 },
+    { id: "top-left", label: "内容框左上角", ax: 0, ay: 0 },
+    { id: "top-right", label: "内容框右上角", ax: 1, ay: 0 }
+];
+
+/**
+ * 把预设 + 该块自己的底部接触带，解析成可以直接用的归一化锚点。
+ * foot 为空（内容太小 / 全透明）时退回内容框底部中心。
+ */
+function resolveAnchorForBlock(bbox, anchor, foot) {
+    var out = { ax: anchor.ax, ay: anchor.ay, ox: anchor.ox || 0, oy: anchor.oy || 0 };
+    if (out.ax == null) {
+        if (foot && bbox && bbox.w > 0) {
+            var center = (foot.x0 + foot.x1 + 1) / 2;
+            out.ax = (center - bbox.x) / bbox.w;
+        } else {
+            out.ax = 0.5;
+        }
+    }
+    return out;
+}
+
+/**
+ * 锚点在「块内局部坐标」中的位置（块内局部 = 源图像素 - 块左上角）。
+ * bbox 同样使用块内局部坐标。取整是为了避免逐帧亚像素抖动。
+ */
+function computeAnchorLocal(bbox, anchor) {
+    return {
+        x: rint(bbox.x + anchor.ax * bbox.w + (anchor.ox || 0)),
+        y: rint(bbox.y + anchor.ay * bbox.h + (anchor.oy || 0))
+    };
+}
+
+/** 取该块实际生效的锚点：块自带的 anchor 优先，否则用全局预设 */
+function anchorOfItem(it, anchor) {
+    return it && it.anchor ? it.anchor : anchor;
+}
+
+/** 一组数的中位数。偶数个时取中间两个的平均值（不是上中位数） */
+function medianOf(values) {
+    if (values.length === 0) return 0;
+    const s = values.slice().sort(function (a, b) { return a - b; });
+    const mid = s.length >> 1;
+    if (s.length % 2 === 1) return s[mid];
+    return (s[mid - 1] + s[mid]) / 2;
+}
+
+/**
+ * 求出「落点」——所有帧的锚点最终要落到的那个像素位置。
+ *
+ * opts:
+ *   { mode: "baseline" }        落点 = 基准块的锚点位置（基准帧保持不动）
+ *   { mode: "median" }          落点 = 所有帧锚点位置的中位数（各帧位移最均衡）
+ *   { mode: "cell", x, y }      落点 = 指定的格子内位置（例如格子中心）
+ * 返回 { x, y, base }。
+ */
+function computePivotTarget(items, anchor, baselineId, opts) {
+    const list = items.filter(function (it) { return it.include !== false && it.bbox; });
+    let base = null;
+    for (const it of list) if (it.id === baselineId) base = it;
+    if (!base && list.length > 0) base = list[0];
+
+    const o = typeof opts === "string" ? { mode: opts } : (opts || {});
+    const mode = o.mode || "baseline";
+
+    if (list.length === 0) return { x: 0, y: 0, base: null };
+    if (mode === "none") return { x: 0, y: 0, base: base };
+
+    if (mode === "median") {
+        return {
+            x: rint(medianOf(list.map(function (it) {
+                return computeAnchorLocal(it.bbox, anchorOfItem(it, anchor)).x;
+            }))),
+            y: rint(medianOf(list.map(function (it) {
+                return computeAnchorLocal(it.bbox, anchorOfItem(it, anchor)).y;
+            }))),
+            base: base
+        };
+    }
+
+    if (mode === "cell") {
+        return { x: rint(o.x || 0), y: rint(o.y || 0), base: base };
+    }
+
+    const baseAnchor = computeAnchorLocal(base.bbox, anchorOfItem(base, anchor));
+    return {
+        x: baseAnchor.x + (base.mode === "manual" ? rint(base.offset.x) : 0),
+        y: baseAnchor.y + (base.mode === "manual" ? rint(base.offset.y) : 0),
+        base: base
+    };
+}
+
+/**
+ * 对齐求解。
+ * items: [{ id, bbox, offset, mode:'auto'|'manual', include, anchor? }]，bbox 为块内局部坐标。
+ *   - 自动块：offset = 落点 - 自身锚点位置
+ *   - 手动块：保持自身 offset
+ * pivotOpt 见 computePivotTarget。返回 Map<id, {x,y}>（整数像素）。
+ */
+function computeAlignOffsets(items, anchor, baselineId, pivotOpt) {
+    const out = new Map();
+    for (const it of items) out.set(it.id, { x: 0, y: 0 });
+    const list = items.filter(function (it) { return it.include !== false && it.bbox; });
+    if (list.length === 0) return out;
+
+    const target = computePivotTarget(items, anchor, baselineId, pivotOpt);
+    const base = target.base;
+    const o = typeof pivotOpt === "string" ? { mode: pivotOpt } : (pivotOpt || {});
+    const mode = o.mode || "baseline";
+
+    // 「不对齐」：所有自动块都留在原位，便于先套索/切分、稍后再对齐
+    if (mode === "none") {
+        for (const it of items) out.set(it.id, { x: 0, y: 0 });
+        return out;
+    }
+
+    for (const it of items) {
+        if (it.mode === "manual" || it.include === false || !it.bbox) {
+            out.set(it.id, { x: rint(it.offset.x), y: rint(it.offset.y) });
+            continue;
+        }
+        if (mode === "baseline" && base && it.id === base.id) {
+            out.set(it.id, { x: 0, y: 0 });
+            continue;
+        }
+        const a = computeAnchorLocal(it.bbox, anchorOfItem(it, anchor));
+        out.set(it.id, { x: target.x - a.x, y: target.y - a.y });
+    }
+    return out;
+}
+
+/** 自动挑基准：内容中心最接近所有块内容中心中位数的那个块 */
+function pickAutoBaseline(items) {
+    const list = items.filter(function (it) { return it.include !== false && it.bbox; });
+    if (list.length === 0) return null;
+    const cxs = list.map(function (it) { return it.bbox.x + it.bbox.w / 2; }).sort(function (a, b) { return a - b; });
+    const cys = list.map(function (it) { return it.bbox.y + it.bbox.h / 2; }).sort(function (a, b) { return a - b; });
+    const mx = cxs[Math.floor(cxs.length / 2)];
+    const my = cys[Math.floor(cys.length / 2)];
+    let best = null;
+    let bestD = Infinity;
+    for (const it of list) {
+        const cx = it.bbox.x + it.bbox.w / 2;
+        const cy = it.bbox.y + it.bbox.h / 2;
+        const d = Math.hypot(cx - mx, cy - my);
+        if (d < bestD) { bestD = d; best = it.id; }
+    }
+    return best;
+}
+
+/**
+ * 点是否在多边形内（射线法）。poly 为 [{x,y}, ...]，闭合与否都能处理。
+ * 用于「多边形套索」遮罩：只保留圈内的像素。
+ */
+function pointInPoly(poly, x, y) {
+    if (!poly || poly.length < 3) return true;
+    let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i, i += 1) {
+        const xi = poly[i].x, yi = poly[i].y;
+        const xj = poly[j].x, yj = poly[j].y;
+        const intersect = ((yi > y) !== (yj > y)) &&
+            (x < (xj - xi) * (y - yi) / ((yj - yi) || 1e-9) + xi);
+        if (intersect) inside = !inside;
+    }
+    return inside;
+}
+
+/**
+ * 把多边形顶点从「源图绝对坐标」换算到「相对某点」的局部坐标。
+ *
+ * 多边形一律以**源图绝对坐标**保存 —— 这样无论格子怎么重排、crop 怎么变，
+ * 遮罩都跟着像素走，不会错位。只有在真正绘制/逐像素采样时才换算成局部坐标。
+ */
+function polyToLocal(poly, ox, oy) {
+    if (!poly) return null;
+    return poly.map(function (p) { return { x: p.x - ox, y: p.y - oy }; });
+}
+
+/** 多边形的包围盒（保持传入坐标系）；无多边形时返回 null */
+function polyBounds(poly) {
+    if (!poly || poly.length === 0) return null;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of poly) {
+        if (p.x < minX) minX = p.x;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.y > maxY) maxY = p.y;
+    }
+    return {
+        x: rint(minX), y: rint(minY),
+        w: Math.max(1, rint(maxX - minX) + 1),
+        h: Math.max(1, rint(maxY - minY) + 1)
+    };
+}
+
+/**
+ * 把一个块的 crop 区域画到 (dx,dy)，带多边形遮罩。
+ *
+ * poly 存的是**源图绝对坐标**，这里换算成 crop 局部再裁剪。
+ */
+function drawBlockSlice(ctx, img, blk, crop, dx, dy) {
+    var local = polyToLocal(blk.poly, crop.x, crop.y);
+    if (!local || local.length < 3) {
+        ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, dx, dy, crop.w, crop.h);
+        return;
+    }
+    ctx.save();
+    ctx.beginPath();
+    for (var i = 0; i < local.length; i += 1) {
+        var px = dx + local[i].x;
+        var py = dy + local[i].y;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(img, crop.x, crop.y, crop.w, crop.h, dx, dy, crop.w, crop.h);
+    ctx.restore();
+}
+
+/**
+ * 一个块要绘制哪块源图区域（窗口像素，绝对坐标）。
+ *
+ * 默认就是块自身的格子（sx,sy,sw,sh）。当「重新等分」把格子改成了等分格、
+ * 而内容还在原来的位置时，crop 会指向内容原来所在的地方 —— 于是等分格能
+ * 显示来自别处的内容。内容框 bbox 始终相对 crop 左上角。
+ */
+function cropOfItem(it) {
+    if (it && it.crop) return it.crop;
+    return { x: it.sx, y: it.sy, w: it.sw, h: it.sh };
+}
+
+/**
+ * 导出排布：所有帧共用同一画布，锚点落在同一像素。
+ *
+ * opts.mode:
+ *   "cell"  —— 帧画布 = 原格子尺寸（默认）。内容只在各自格子内平移，
+ *              所以网格图导出后分辨率与原图完全一致，可以直接替换原文件。
+ *              代价：内容移出格子边界的部分会被裁掉（clip 里会报告）。
+ *   "tight" —— 帧画布 = 所有帧内容包围盒的并集（最紧凑），分辨率会变小。
+ *
+ * opts.padding: 四周追加的透明留白（不改变帧间相对位移）。
+ *
+ * 返回 { mode, width, height, frames:[{id,dx,dy,sx,sy,sw,sh}], minX, minY, cellWidth, cellHeight, clip }
+ */
+function computeExportLayout(items, offsets, opts) {
+    const o = typeof opts === "number" ? { padding: opts } : (opts || {});
+    const pad = Math.max(0, rint(o.padding || 0));
+    const mode = o.mode === "tight" ? "tight" : "cell";
+    const list = items.filter(function (it) { return it.include !== false && it.bbox; });
+
+    if (list.length === 0) {
+        return {
+            mode: mode, width: 0, height: 0, frames: [], minX: 0, minY: 0,
+            cellWidth: 0, cellHeight: 0, clip: []
+        };
+    }
+
+    if (mode === "cell") {
+        // 帧画布 = 各块「格子」的最大尺寸。
+        // 注意用 sw/sh（格子）而不是 crop 的宽高：重新等分后格子是等分的，
+        // 而 crop 可能比格子小（内容只占一部分）或更大（内容溢出）。
+        let cellW = 0;
+        let cellH = 0;
+        for (const it of list) {
+            cellW = Math.max(cellW, it.sw || 0);
+            cellH = Math.max(cellH, it.sh || 0);
+        }
+        cellW = Math.max(1, cellW);
+        cellH = Math.max(1, cellH);
+
+        const frames = list.map(function (it) {
+            const off = offsets.get(it.id) || { x: 0, y: 0 };
+            const cr = cropOfItem(it);
+            return {
+                id: it.id,
+                dx: pad + off.x,
+                dy: pad + off.y,
+                sx: cr.x,
+                sy: cr.y,
+                sw: cr.w,
+                sh: cr.h,
+                // poly 存源图绝对坐标，导出布局换算成 crop 局部，供渲染直接裁剪
+                poly: it.poly ? polyToLocal(it.poly, cr.x, cr.y) : null
+            };
+        });
+
+        // 内容被格子边界裁掉多少（正数 = 溢出像素）
+        const clip = [];
+        for (const it of list) {
+            const off = offsets.get(it.id) || { x: 0, y: 0 };
+            const left = -(off.x + it.bbox.x);
+            const top = -(off.y + it.bbox.y);
+            const right = (off.x + it.bbox.x + it.bbox.w) - cellW;
+            const bottom = (off.y + it.bbox.y + it.bbox.h) - cellH;
+            const over = Math.max(left, top, right, bottom, 0);
+            if (over > 0) {
+                clip.push({
+                    id: it.id,
+                    left: Math.max(0, rint(left)),
+                    top: Math.max(0, rint(top)),
+                    right: Math.max(0, rint(right)),
+                    bottom: Math.max(0, rint(bottom)),
+                    over: rint(over)
+                });
+            }
+        }
+
+        return {
+            mode: mode,
+            width: cellW + pad * 2,
+            height: cellH + pad * 2,
+            frames: frames,
+            minX: -pad,
+            minY: -pad,
+            cellWidth: cellW,
+            cellHeight: cellH,
+            clip: clip
+        };
+    }
+
+    const frames = [];
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const it of list) {
+        const off = offsets.get(it.id) || { x: 0, y: 0 };
+        const x = it.bbox.x + off.x;
+        const y = it.bbox.y + off.y;
+        const cr0 = cropOfItem(it);
+        frames.push({
+            id: it.id,
+            x: x,
+            y: y,
+            sx: cr0.x + it.bbox.x,
+            sy: cr0.y + it.bbox.y,
+            sw: it.bbox.w,
+            sh: it.bbox.h,
+            poly: it.poly ? polyToLocal(it.poly, cr0.x + it.bbox.x, cr0.y + it.bbox.y) : null
+        });
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (x + it.bbox.w > maxX) maxX = x + it.bbox.w;
+        if (y + it.bbox.h > maxY) maxY = y + it.bbox.h;
+    }
+
+    // 原点取整：所有帧共享同一个取整后的原点，所以帧间相对位移不受取整影响
+    const originX = rint(minX - pad);
+    const originY = rint(minY - pad);
+    const width = Math.max(1, rint(maxX - minX) + pad * 2);
+    const height = Math.max(1, rint(maxY - minY) + pad * 2);
+
+    for (const f of frames) {
+        f.dx = f.x - originX;
+        f.dy = f.y - originY;
+    }
+
+    return {
+        mode: mode,
+        width: width,
+        height: height,
+        frames: frames,
+        minX: originX,
+        minY: originY,
+        cellWidth: width - pad * 2,
+        cellHeight: height - pad * 2,
+        clip: []
+    };
+}
+
+/**
+ * 导出画布中的锚点像素位置。
+ * 对齐正确时所有帧一致，所以取一帧推算即可 —— 但必须挑「自动块」：
+ * 手动块是用户特意拖开的，拿它算出来的原点会和其余帧对不上。
+ */
+function computeExportPivot(items, offsets, anchor, layout) {
+    if (!layout || layout.frames.length === 0) return { x: 0, y: 0 };
+    let pick = null;
+    for (const f of layout.frames) {
+        const it = items.filter(function (x) { return x.id === f.id; })[0];
+        if (it && it.mode !== "manual") { pick = it; break; }
+    }
+    if (!pick) pick = items.filter(function (x) { return x.id === layout.frames[0].id; })[0];
+    if (!pick || !pick.bbox) return { x: 0, y: 0 };
+    const off = offsets.get(pick.id) || { x: 0, y: 0 };
+    const a = computeAnchorLocal(pick.bbox, anchorOfItem(pick, anchor));
+    return { x: rint(a.x + off.x - layout.minX), y: rint(a.y + off.y - layout.minY) };
+}
+
+/**
+ * 各帧锚点相对 pivot 的偏差。
+ * 自动块之间偏差应当为 0；手动块被拖开后会出现在这里 ——
+ * 这正是「导出的帧其实没对齐」的量化提示。
+ */
+function computePivotSpread(items, offsets, anchor, layout, pivot) {
+    const list = [];
+    let max = 0;
+    for (const f of layout.frames) {
+        const it = items.filter(function (x) { return x.id === f.id; })[0];
+        if (!it || !it.bbox) continue;
+        const off = offsets.get(f.id) || { x: 0, y: 0 };
+        const a = computeAnchorLocal(it.bbox, anchorOfItem(it, anchor));
+        // 帧在导出画布中的锚点位置：
+        //   cell 模式落点 = off（已含留白），紧凑模式落点 = off - minX
+        const px = a.x + off.x - layout.minX;
+        const py = a.y + off.y - layout.minY;
+        const dx = rint(px - pivot.x);
+        const dy = rint(py - pivot.y);
+        const d = Math.max(Math.abs(dx), Math.abs(dy));
+        if (d > 0) {
+            list.push({ id: f.id, dx: dx, dy: dy, dist: d, mode: it.mode });
+            if (d > max) max = d;
+        }
+    }
+    return { max: max, frames: list };
+}
+
+/** 单轴吸附：返回 { d, ad, guide }，guide 是命中的目标坐标 */
+function snapAxis(movEdges, tgtEdges, radius, held, releaseRadius) {
+    let best = null;
+    for (const m of movEdges) {
+        for (const t of tgtEdges) {
+            const d = t - m;
+            const ad = Math.abs(d);
+            const limit = held ? releaseRadius : radius;
+            if (ad <= limit && (!best || ad < best.ad)) best = { d: d, ad: ad, guide: t };
+        }
+    }
+    return best;
+}
+
+/**
+ * 拖动时的吸附修正。
+ * moving / target: {x,y,w,h}（同一坐标系，已含各自 offset）
+ * movingAnchor / targetAnchor: {x,y}
+ * prev: { x, y, point } 上一次的吸附保持状态（迟滞：沿着已对齐的边滑动时不会掉吸附）
+ * 返回 { dx, dy, guides, snapped }
+ */
+function computeSnapAdjust(opts) {
+    const radius = opts.radius;
+    const release = opts.releaseRadius != null ? opts.releaseRadius : radius * 1.9;
+    const prev = opts.prev || { x: false, y: false, point: false };
+    const m = opts.moving;
+    const t = opts.target;
+
+    const movX = [m.x, m.x + m.w / 2, m.x + m.w];
+    const tgtX = [t.x, t.x + t.w / 2, t.x + t.w];
+    const movY = [m.y, m.y + m.h / 2, m.y + m.h];
+    const tgtY = [t.y, t.y + t.h / 2, t.y + t.h];
+
+    const out = { dx: 0, dy: 0, guides: [], snapped: { x: false, y: false, point: false } };
+
+    const bx = snapAxis(movX, tgtX, radius, prev.x, release);
+    if (bx) {
+        out.dx = bx.d;
+        out.guides.push({ axis: "x", value: bx.guide });
+        out.snapped.x = true;
+    }
+
+    const by = snapAxis(movY, tgtY, radius, prev.y, release);
+    if (by) {
+        out.dy = by.d;
+        out.guides.push({ axis: "y", value: by.guide });
+        out.snapped.y = true;
+    }
+
+    // 两个轴都没有边吸附时，才尝试锚点对锚点的点吸附
+    if (!bx && !by && opts.movingAnchor && opts.targetAnchor) {
+        const pdx = opts.targetAnchor.x - opts.movingAnchor.x;
+        const pdy = opts.targetAnchor.y - opts.movingAnchor.y;
+        const limit = prev.point ? release : radius;
+        if (Math.hypot(pdx, pdy) <= limit) {
+            out.dx = pdx;
+            out.dy = pdy;
+            out.snapped.point = true;
+            out.guides.push({ axis: "point", value: opts.targetAnchor.x, value2: opts.targetAnchor.y });
+        }
+    }
+    return out;
+}
+
+/** 按命令把拖动块对齐到基准块，返回位移增量 */
+function alignToTarget(edge, moving, target) {
+    switch (edge) {
+        case "left": return { dx: target.x - moving.x, dy: 0 };
+        case "right": return { dx: (target.x + target.w) - (moving.x + moving.w), dy: 0 };
+        case "centerX": return { dx: (target.x + target.w / 2) - (moving.x + moving.w / 2), dy: 0 };
+        case "top": return { dx: 0, dy: target.y - moving.y };
+        case "bottom": return { dx: 0, dy: (target.y + target.h) - (moving.y + moving.h) };
+        case "centerY": return { dx: 0, dy: (target.y + target.h / 2) - (moving.y + moving.h / 2) };
+        default: return { dx: 0, dy: 0 };
+    }
+}
+
+/* ---- ZIP（store，不压缩）---- */
+var CRC32_TABLE = (function () {
+    const t = new Uint32Array(256);
+    for (let n = 0; n < 256; n += 1) {
+        let c = n;
+        for (let k = 0; k < 8; k += 1) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        t[n] = c >>> 0;
+    }
+    return t;
+})();
+
+function crc32(bytes) {
+    let c = 0xFFFFFFFF;
+    for (let i = 0; i < bytes.length; i += 1) c = CRC32_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+    return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+/** files: [{ name, data:Uint8Array }] → Uint8Array（zip） */
+function zipStore(files, encodeName) {
+    const enc = encodeName || new TextEncoder();
+    const chunks = [];
+    const central = [];
+    let offset = 0;
+
+    for (const f of files) {
+        const nameBytes = enc.encode(f.name);
+        const data = f.data;
+        const crc = crc32(data);
+        const local = new Uint8Array(30 + nameBytes.length);
+        const dv = new DataView(local.buffer);
+        dv.setUint32(0, 0x04034b50, true);
+        dv.setUint16(4, 20, true);
+        dv.setUint16(6, 0x0800, true);
+        dv.setUint16(8, 0, true);
+        dv.setUint16(10, 0, true);
+        dv.setUint16(12, 0x21, true);
+        dv.setUint32(14, crc, true);
+        dv.setUint32(18, data.length, true);
+        dv.setUint32(22, data.length, true);
+        dv.setUint16(26, nameBytes.length, true);
+        dv.setUint16(28, 0, true);
+        local.set(nameBytes, 30);
+        chunks.push(local, data);
+        central.push({ nameBytes: nameBytes, crc: crc, size: data.length, offset: offset });
+        offset += local.length + data.length;
+    }
+
+    const cdChunks = [];
+    let cdSize = 0;
+    for (const e of central) {
+        const cd = new Uint8Array(46 + e.nameBytes.length);
+        const dv = new DataView(cd.buffer);
+        dv.setUint32(0, 0x02014b50, true);
+        dv.setUint16(4, 20, true);
+        dv.setUint16(6, 20, true);
+        dv.setUint16(8, 0x0800, true);
+        dv.setUint16(10, 0, true);
+        dv.setUint16(12, 0, true);
+        dv.setUint16(14, 0x21, true);
+        dv.setUint32(16, e.crc, true);
+        dv.setUint32(20, e.size, true);
+        dv.setUint32(24, e.size, true);
+        dv.setUint16(28, e.nameBytes.length, true);
+        dv.setUint32(42, e.offset, true);
+        cd.set(e.nameBytes, 46);
+        cdChunks.push(cd);
+        cdSize += cd.length;
+    }
+
+    const end = new Uint8Array(22);
+    const edv = new DataView(end.buffer);
+    edv.setUint32(0, 0x06054b50, true);
+    edv.setUint16(8, central.length, true);
+    edv.setUint16(10, central.length, true);
+    edv.setUint32(12, cdSize, true);
+    edv.setUint32(16, offset, true);
+
+    const all = chunks.concat(cdChunks, [end]);
+    let total = 0;
+    for (const c of all) total += c.length;
+    const out = new Uint8Array(total);
+    let p = 0;
+    for (const c of all) { out.set(c, p); p += c.length; }
+    return out;
+}
+
+/** 简易视图变换（屏幕 CSS px ↔ 世界 px），源画布与预览共用 */
+function View() {
+    this.scale = 1;
+    this.tx = 0;
+    this.ty = 0;
+}
+View.prototype.toWorld = function (sx, sy) {
+    return { x: (sx - this.tx) / this.scale, y: (sy - this.ty) / this.scale };
+};
+View.prototype.toScreen = function (wx, wy) {
+    return { x: wx * this.scale + this.tx, y: wy * this.scale + this.ty };
+};
+View.prototype.zoomAt = function (sx, sy, factor, min, max) {
+    const before = this.toWorld(sx, sy);
+    this.scale = clamp(this.scale * factor, min, max);
+    const after = this.toScreen(before.x, before.y);
+    this.tx += sx - after.x;
+    this.ty += sy - after.y;
+};
+View.prototype.fit = function (w, h, availW, availH, margin, maxScale) {
+    const m = margin == null ? 16 : margin;
+    const s = Math.min((availW - m * 2) / Math.max(1, w), (availH - m * 2) / Math.max(1, h));
+    this.scale = clamp(s, 0.02, maxScale == null ? 16 : maxScale);
+    this.tx = (availW - w * this.scale) / 2;
+    this.ty = (availH - h * this.scale) / 2;
+};
+View.prototype.centerOn = function (wx, wy, availW, availH) {
+    this.tx = availW / 2 - wx * this.scale;
+    this.ty = availH / 2 - wy * this.scale;
+};
+/* ==== CORE:END ==== */
+
+/* ============================================================
+ * 应用层（DOM / 画布 / 交互）
+ * ============================================================ */
+
+var $ = function (id) { return document.getElementById(id); };
+
+var state = {
+    sources: [],
+    blocks: [],
+    seq: 1,
+    selectedSourceId: null,
+    selectedBlockId: null,
+    anchor: { preset: "foot-center", ax: null, ay: 1, ox: 0, oy: 0 },
+    baselineId: null,
+    threshold: 8,
+    offsets: new Map(),
+    layout: null,
+    view: new View(),
+    pview: new View(),
+    show: { cuts: true, bbox: true, anchor: true, pivot: true, index: true, aligned: false, split: false },
+    splitRatio: 0.5,
+    manual: {
+        on: false,
+        moveId: null,
+        refId: null,
+        drag: null,
+        snap: { x: false, y: false, point: false },
+        guides: []
+    },
+    sim: { playing: false, idx: 0, acc: 0, last: 0, raf: 0, fps: 12 },
+    preview: { opacity: 0.55, refOnly: false },
+    exp: { pad: 0, scale: 1, cols: 8, frameMode: "cell", pivotMode: "baseline", pivotX: 0, pivotY: 0 },
+    // 工作区里多张图片的排列方式：v 纵向 / h 横向 / grid 网格
+    arrange: "v",
+    arrangeCols: 0,
+    hoverCut: null,
+    previewPan: null,
+    pendingFit: false,
+    pendingGridReport: null,
+    // 用户手动缩放/平移过之后就不再自动适应窗口，免得抢走他调好的视角
+    viewTouched: false,
+    undo: [],
+    redo: []
+};
+
+/* ---------- 基础查询 ---------- */
+
+function sourceById(id) {
+    for (var i = 0; i < state.sources.length; i += 1) {
+        if (state.sources[i].id === id) return state.sources[i];
+    }
+    return null;
+}
+
+function blockById(id) {
+    for (var i = 0; i < state.blocks.length; i += 1) {
+        if (state.blocks[i].id === id) return state.blocks[i];
+    }
+    return null;
+}
+
+function offsetOf(id) {
+    return state.offsets.get(id) || { x: 0, y: 0 };
+}
+
+/** 可导出的帧（按列表顺序） */
+function exportableBlocks() {
+    return state.blocks.filter(function (b) { return b.include !== false && b.bbox; });
+}
+
+function setStatus(msg) {
+    $("status").textContent = msg;
+}
+
+function sourceLabel(sid) {
+    var s = sourceById(sid);
+    if (!s) return "?";
+    return "S" + (state.sources.indexOf(s) + 1);
+}
+
+function blockLabel(b) {
+    if (!b) return "?";
+    var s = sourceById(b.sourceId);
+    var kind = s && s.kind === "frame" ? "F" : "R" + b.row + "C" + b.col;
+    return "#" + (state.blocks.indexOf(b) + 1) + " " + kind;
+}
+
+function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+        return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+}
+
+/* ---------- 撤销 / 重做 ---------- */
+
+/**
+ * 历史记录步数上限。
+ *
+ * 快照是整份文档状态（块 + 分割线 + 锚点）的 JSON。切成千块时单份快照就能到几百 KB，
+ * 所以按「总量封顶」反推条数，而不是拍一个固定数字：小图给足步数，
+ * 大图自动收敛，避免为了撤销把内存吃满。
+ */
+var UNDO_BUDGET_CHARS = 1500000;
+var UNDO_MIN_STEPS = 8;
+var UNDO_MAX_STEPS = 120;
+
+function undoStepLimit() {
+    var perSnapshot = state.blocks.length * 220 + 2000;
+    return clamp(Math.floor(UNDO_BUDGET_CHARS / perSnapshot), UNDO_MIN_STEPS, UNDO_MAX_STEPS);
+}
+
+/**
+ * 完整状态快照。
+ *
+ * 关键教训：**必须存块的几何本身（sx/sy/sw/sh/crop/poly），不能只存分割线**。
+ * 早先只存 cuts，靠 rebuildBlocksFromCuts 重建 —— 但「重新等分」「归一化格子尺寸」
+ * 会把块的几何改成和分割线无关的值（重新等分还会把 cutsX 清空）。
+ * 一旦在那种状态后做快照，撤销时按空 cuts 重建就只剩 1 块 —— 三帧变一帧、分割线全没。
+ *
+ * 现在存的是"所见即所得"的完整文档：源、块、锚点、落点模式、排列、阈值。
+ */
+function snapshot() {
+    return JSON.stringify({
+        sources: state.sources.map(function (s) {
+            return {
+                id: s.id,
+                kind: s.kind,
+                cutsX: s.cutsX.slice(),
+                cutsY: s.cutsY.slice()
+            };
+        }),
+        blocks: state.blocks.map(function (b) {
+            return {
+                id: b.id, sourceId: b.sourceId, row: b.row, col: b.col,
+                sx: b.sx, sy: b.sy, sw: b.sw, sh: b.sh,
+                bbox: b.bbox, bboxMode: b.bboxMode, include: b.include,
+                offset: b.offset, mode: b.mode, opacity: b.opacity, overlay: b.overlay,
+                crop: b.crop || null, poly: b.poly || null,
+                empty: !!b.empty, foot: b.foot || null
+            };
+        }),
+        anchor: state.anchor,
+        baselineId: state.baselineId,
+        exp: {
+            pivotMode: state.exp.pivotMode,
+            pivotX: state.exp.pivotX,
+            pivotY: state.exp.pivotY,
+            frameMode: state.exp.frameMode,
+            pad: state.exp.pad
+        },
+        arrange: state.arrange,
+        arrangeCols: state.arrangeCols,
+        threshold: state.threshold
+    });
+}
+
+/**
+ * 把一份快照写回当前文档状态。
+ *
+ * 块直接按快照重建（不经过 rebuildBlocksFromCuts）—— 这样块几何、
+ * crop、poly 都和快照完全一致，不会因为分割线被清空而塌成一块。
+ */
+function applySnapshot(snapText) {
+    var snap = JSON.parse(snapText);
+
+    // 1. 源：切分与类型
+    (snap.sources || []).forEach(function (rec) {
+        var s = sourceById(rec.id);
+        if (!s) return;
+        s.kind = rec.kind || "sheet";
+        s.cutsX = (rec.cutsX || []).slice();
+        s.cutsY = (rec.cutsY || []).slice();
+    });
+
+    // 2. 块：整表重建（几何也一起还原）
+    state.blocks = (snap.blocks || []).map(function (b) {
+        return {
+            id: b.id,
+            sourceId: b.sourceId,
+            row: b.row,
+            col: b.col,
+            sx: b.sx, sy: b.sy, sw: b.sw, sh: b.sh,
+            bbox: b.bbox,
+            bboxMode: b.bboxMode,
+            include: b.include,
+            offset: b.offset,
+            mode: b.mode,
+            opacity: b.opacity,
+            overlay: b.overlay,
+            crop: b.crop || null,
+            poly: b.poly || null,
+            empty: !!b.empty,
+            foot: b.foot || null,
+            _imgData: null,
+            _thumb: null
+        };
+    });
+
+    // 3. 其余文档状态
+    state.anchor = snap.anchor || state.anchor;
+    state.baselineId = snap.baselineId;
+    if (snap.exp) {
+        state.exp.pivotMode = snap.exp.pivotMode || "baseline";
+        state.exp.pivotX = snap.exp.pivotX;
+        state.exp.pivotY = snap.exp.pivotY;
+        if (snap.exp.frameMode) state.exp.frameMode = snap.exp.frameMode;
+        if (snap.exp.pad != null) state.exp.pad = snap.exp.pad;
+    }
+    if (snap.arrange) state.arrange = snap.arrange;
+    if (snap.arrangeCols != null) state.arrangeCols = snap.arrangeCols;
+    if (snap.threshold != null) state.threshold = snap.threshold;
+
+    // 4. 选中/基准/手动对齐对像是"游标"，不能指向已不存在的块
+    if (!blockById(state.selectedBlockId)) {
+        state.selectedBlockId = state.blocks.length > 0 ? state.blocks[0].id : null;
+    }
+    if (!blockById(state.baselineId)) {
+        state.baselineId = state.blocks.length > 0 ? state.blocks[0].id : null;
+    }
+    if (state.manual.moveId && !blockById(state.manual.moveId)) {
+        state.manual.moveId = state.selectedBlockId;
+    }
+    if (state.manual.refId && !blockById(state.manual.refId)) {
+        state.manual.refId = state.baselineId;
+    }
+
+    // 5. 控件要跟着回填（否则界面显示的落点/阈值和实际状态不一致）
+    syncControlsFromState();
+}
+
+/** 把状态回填到各控件上（撤销/重做后调用） */
+function syncControlsFromState() {
+    if ($("pivotMode")) $("pivotMode").value = state.exp.pivotMode;
+    if ($("pivotCellX")) $("pivotCellX").value = state.exp.pivotX;
+    if ($("pivotCellY")) $("pivotCellY").value = state.exp.pivotY;
+    if ($("threshold")) $("threshold").value = String(state.threshold);
+    if ($("thresholdVal")) $("thresholdVal").textContent = String(state.threshold);
+    if ($("arrangeSel")) syncArrangeControls();
+    if ($("anchorPreset")) $("anchorPreset").value = state.anchor.preset;
+    if ($("anchorOx")) $("anchorOx").value = state.anchor.ox;
+    if ($("anchorOy")) $("anchorOy").value = state.anchor.oy;
+    if ($("frameMode")) $("frameMode").value = state.exp.frameMode;
+    if ($("padInput")) $("padInput").value = String(state.exp.pad);
+}
+
+/**
+ * 记录一次可撤销的操作。
+ * label 会在状态栏显示，让用户知道撤销掉的到底是什么。
+ */
+function pushUndo(label) {
+    var snap = snapshot();
+    // 内容没变就不占一格历史（例如点了个不改变结果的操作）
+    if (state.undo.length > 0 && state.undo[state.undo.length - 1].snap === snap) return;
+    state.undo.push({ snap: snap, label: label || "操作" });
+    var limit = undoStepLimit();
+    while (state.undo.length > limit) state.undo.shift();
+    // 产生新分支后，原来的重做链就失效了
+    state.redo.length = 0;
+    syncHistoryButtons();
+}
+
+/** 把一份快照写回当前文档状态 */
+function undo() {
+    if (state.undo.length === 0) { setStatus("没有可撤销的操作"); return; }
+    var entry = state.undo.pop();
+    state.redo.push({ snap: snapshot(), label: entry.label });
+    applySnapshot(entry.snap);
+    refreshAll();
+    syncHistoryButtons();
+    setStatus("已撤销：" + entry.label + "（还可撤销 " + state.undo.length + " 步）");
+}
+
+function redo() {
+    if (state.redo.length === 0) { setStatus("没有可重做的操作"); return; }
+    var entry = state.redo.pop();
+    state.undo.push({ snap: snapshot(), label: entry.label });
+    applySnapshot(entry.snap);
+    refreshAll();
+    syncHistoryButtons();
+    setStatus("已重做：" + entry.label);
+}
+
+function syncHistoryButtons() {
+    var u = $("undoBtn");
+    var r = $("redoBtn");
+    if (!u || !r) return;
+    u.disabled = state.undo.length === 0;
+    r.disabled = state.redo.length === 0;
+    u.title = state.undo.length > 0
+        ? "撤销：" + state.undo[state.undo.length - 1].label + "（Ctrl+Z）"
+        : "没有可撤销的操作";
+    r.title = state.redo.length > 0
+        ? "重做：" + state.redo[state.redo.length - 1].label + "（Ctrl+Y）"
+        : "没有可重做的操作";
+}
+
+/* ---------- 图片导入 ---------- */
+
+function nextSourceId() { return "src" + (state.seq += 1); }
+
+function addFiles(fileList) {
+    var files = Array.prototype.slice.call(fileList).filter(function (f) {
+        return /^image\//.test(f.type) || /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name);
+    });
+    if (files.length === 0) { setStatus("没有可用的图片文件"); return; }
+    files.sort(function (a, b) { return naturalCompare(a.name, b.name); });
+
+    var pending = files.length;
+    var added = [];
+    files.forEach(function (file) {
+        var url = URL.createObjectURL(file);
+        var img = new Image();
+        img.onload = function () {
+            state.sources.push({
+                id: nextSourceId(),
+                name: file.name,
+                kind: "sheet",
+                url: url,
+                img: img,
+                width: img.naturalWidth,
+                height: img.naturalHeight,
+                cutsX: [],
+                cutsY: []
+            });
+            added.push(state.sources[state.sources.length - 1]);
+            pending -= 1;
+            if (pending === 0) finishAdd(added);
+        };
+        img.onerror = function () {
+            pending -= 1;
+            setStatus("读取失败：" + file.name);
+            if (pending === 0) finishAdd(added);
+        };
+        img.src = url;
+    });
+}
+
+/**
+ * 把「排列方式」的选择状态同步到控件上（网格模式才显示列数输入）。
+ * finishAdd 里自动切横向时也会调用，所以放在模块作用域而不是绑定块内。
+ */
+/**
+ * 各块格子尺寸不一致时给出提示 —— 这不是错，但会带来夹取/参差/导出边缘不一致的问题，
+ * 主动提示一句，用户才知道有「归一化格子尺寸」这个按钮。
+ */
+function syncCellSizeWarn() {
+    var el = $("cellSizeWarn");
+    if (!el) return;
+    var eb = exportableBlocks();
+    if (eb.length <= 1 || cellsAreUniform(eb)) {
+        el.innerHTML = "";
+        return;
+    }
+    var max = computeMaxCell(eb);
+    var sizes = {};
+    eb.forEach(function (b) { sizes[b.sw + "×" + b.sh] = true; });
+    el.innerHTML = '<b style="color:#e8b23a">各块格子尺寸不一致</b>（' +
+        Object.keys(sizes).join("、") + '），内容框会被各自的格子夹住、工作区网格也会参差。' +
+        '点「归一化格子尺寸」统一成 <b>' + max.w + "×" + max.h + "</b>。";
+}
+
+function syncArrangeControls() {
+    var sel = $("arrangeSel");
+    var cols = $("arrangeCols");
+    if (sel) sel.value = state.arrange;
+    if (cols) {
+        cols.style.display = state.arrange === "grid" ? "" : "none";
+        cols.value = String(state.arrangeCols);
+    }
+}
+
+/** 取整张源图的 RGBA 数据（自动识别网格时用） */
+function sourceImageData(src) {
+    scratch.width = src.width;
+    scratch.height = src.height;
+    var ctx = scratch.getContext("2d", { willReadFrequently: true });
+    ctx.clearRect(0, 0, src.width, src.height);
+    ctx.drawImage(src.img, 0, 0);
+    return ctx.getImageData(0, 0, src.width, src.height).data;
+}
+
+/**
+ * 对一个图片源自动识别网格并套用。
+ * 返回识别结果摘要，供调用方写状态栏。
+ */
+function autoDetectGrid(src) {
+    var data = sourceImageData(src);
+    var px = computeInkProfile(data, src.width, src.height, "x", state.threshold);
+    var py = computeInkProfile(data, src.width, src.height, "y", state.threshold);
+    var rx = detectGridAxis(px, src.width, 64);
+    var ry = detectGridAxis(py, src.height, 64);
+
+    src.kind = "sheet";
+    src.cutsX = rx.cuts;
+    src.cutsY = ry.cuts;
+    // 顺手记下识别依据，方便在提示里说明
+    src.detectInfo = {
+        cols: rx.cells, rows: ry.cells,
+        methodX: rx.method, methodY: ry.method,
+        confX: rx.confidence, confY: ry.confidence
+    };
+
+    // 网格图导出的列数跟随识别结果
+    if (rx.cells > 1 || ry.cells > 1) $("sheetCols").value = String(rx.cells);
+    $("colsInput").value = rx.cells;
+    $("rowsInput").value = ry.cells;
+    return src.detectInfo;
+}
+
+
+function finishAdd(added) {
+    // 一次只拖一张 → 当成网格图自动识别切分；
+    // 一次拖多张 → 每张各算一帧（那正是「已经导出的独立帧文件」的形状）。
+    // 判据只看这一批的数量，不看库里原有几张：否则后来再拖一张网格图
+    // 会被当成单帧、不给切分，那是错的。
+    var single = added.length === 1;
+    var detected = null;
+    added.forEach(function (src) {
+        if (single) {
+            detected = autoDetectGrid(src);
+        } else {
+            src.kind = "frame";
+        }
+    });
+    // 一次导入多张独立帧时默认横向排（序列帧的习惯），用户随后可以改
+    if (added.length > 1 && state.sources.length === added.length) {
+        state.arrange = "h";
+        syncArrangeControls();
+    }
+    if (added.length > 0) {
+        state.selectedSourceId = added[added.length - 1].id;
+        var last = added[added.length - 1];
+        var lastCols = last.kind === "frame" ? 1 : last.cutsX.length + 1;
+        $("colsInput").value = lastCols;
+        $("rowsInput").value = last.kind === "frame" ? 1 : last.cutsY.length + 1;
+        // 网格图导出的列数默认跟原图一致，这样「原格子尺寸」下导出即原分辨率
+        if (last.kind !== "frame") $("sheetCols").value = String(lastCols);
+    }
+    rebuildBlocksFromCuts(false);
+    state.pendingFit = true;
+    detectAll("missing");
+    if (detected) {
+        state.pendingGridReport = detected;
+    }
+}
+
+/* ---------- 矩阵块构建 ---------- */
+
+function makeBlockId(sourceId, row, col) {
+    return sourceId + "#" + row + "," + col;
+}
+
+function rebuildBlocksFromCuts(keepExisting) {
+    var old = {};
+    if (keepExisting) state.blocks.forEach(function (b) { old[b.id] = b; });
+    var next = [];
+    state.sources.forEach(function (src) {
+        var cells = src.kind === "frame"
+            ? [{ row: 0, col: 0, sx: 0, sy: 0, sw: src.width, sh: src.height }]
+            : computeSheetBlocks(src.width, src.height, src.cutsX, src.cutsY);
+        cells.forEach(function (c) {
+            var id = makeBlockId(src.id, c.row, c.col);
+            var prev = old[id];
+            var same = prev && prev.sx === c.sx && prev.sy === c.sy && prev.sw === c.sw && prev.sh === c.sh;
+            next.push({
+                id: id,
+                sourceId: src.id,
+                row: c.row,
+                col: c.col,
+                sx: c.sx, sy: c.sy, sw: c.sw, sh: c.sh,
+                bbox: same ? prev.bbox : null,
+                crop: same ? (prev.crop || null) : null,
+                poly: same ? (prev.poly || null) : null,
+                bboxMode: same ? prev.bboxMode : "auto",
+                include: same ? prev.include : true,
+                offset: same ? prev.offset : { x: 0, y: 0 },
+                mode: same ? prev.mode : "auto",
+                opacity: same ? prev.opacity : 1,
+                overlay: same ? prev.overlay : false,
+                empty: same ? prev.empty : false,
+                foot: same ? prev.foot : null,
+                // 几何没变时复用像素缓存与缩略图，避免拖动分割线时反复重读
+                _imgData: same ? prev._imgData : null,
+                _thumb: same ? prev._thumb : null
+            });
+        });
+    });
+    state.blocks = next;
+    if (!blockById(state.selectedBlockId)) {
+        state.selectedBlockId = state.blocks.length > 0 ? state.blocks[0].id : null;
+    }
+    if (!blockById(state.baselineId)) {
+        state.baselineId = state.blocks.length > 0 ? state.blocks[0].id : null;
+    }
+    // 切分变化后，参与手动对齐的两块可能已经不存在了，回退到仍然存在的块
+    if (state.manual.moveId && !blockById(state.manual.moveId)) {
+        state.manual.moveId = state.selectedBlockId;
+    }
+    if (state.manual.refId && !blockById(state.manual.refId)) {
+        state.manual.refId = state.baselineId;
+    }
+}
+
+/* ---------- 内容识别 ---------- */
+
+var scratch = document.createElement("canvas");
+
+function blockImageData(b) {
+    var cr = b.crop || { x: b.sx, y: b.sy, w: b.sw, h: b.sh };
+    if (b._imgData && b._imgData.w === cr.w && b._imgData.h === cr.h &&
+        b._imgData.x === cr.x && b._imgData.y === cr.y) return b._imgData.data;
+    var src = sourceById(b.sourceId);
+    if (!src) return null;
+    scratch.width = cr.w;
+    scratch.height = cr.h;
+    var ctx = scratch.getContext("2d", { willReadFrequently: true });
+    ctx.clearRect(0, 0, cr.w, cr.h);
+    ctx.drawImage(src.img, cr.x, cr.y, cr.w, cr.h, 0, 0, cr.w, cr.h);
+    var data = ctx.getImageData(0, 0, cr.w, cr.h).data;
+    b._imgData = { w: cr.w, h: cr.h, x: cr.x, y: cr.y, data: data };
+    return data;
+}
+
+function detectBlock(b) {
+    // 有套索时，内容区域必须由多边形决定 —— 否则重检会把内容框退回「格子里的 alpha 范围」，
+    // 而套索常常圈得比格子大（图案比等分格宽），于是内容框变小、图案被截断。
+    if (b.poly && b.poly.length >= 3) {
+        redetectPolyContent(b);
+        b._thumb = null;
+        return;
+    }
+    var data = blockImageData(b);
+    if (!data) { b.bbox = null; b.empty = true; b.foot = null; return; }
+    // 数据来自 crop（不是格子），尺寸要用 crop 的宽高
+    var cr = b.crop || { x: b.sx, y: b.sy, w: b.sw, h: b.sh };
+    var box = detectAlphaBBox(data, cr.w, cr.h, state.threshold);
+    b.empty = !box;
+    b.bbox = box;
+    b.foot = box ? detectFootBand(data, cr.w, cr.h, box, state.threshold, FOOT_BAND_RATIO) : null;
+    b._thumb = null;
+}
+
+/** 底部接触带占内容高度的比例 */
+var FOOT_BAND_RATIO = 0.12;
+
+/**
+ * 该块实际生效的锚点（归一化）。脚底预设要按每块自己的接触带来算，
+ * 所以这里统一产出，供画布、对齐、pivot 共用，避免各处口径不一致。
+ */
+function anchorFor(b) {
+    return resolveAnchorForBlock(b.bbox, state.anchor, b.foot);
+}
+
+/** 组装给核心对齐/导出函数用的 items（带上每块自己的锚点与源图裁切信息） */
+function alignItems() {
+    return state.blocks.map(function (b) {
+        return {
+            id: b.id,
+            sx: b.sx,
+            sy: b.sy,
+            sw: b.sw,
+            sh: b.sh,
+            // 绘制哪块源图（默认 = 格子本身；重新等分后会指向内容原来所在处）
+            crop: b.crop || null,
+            // 多边形遮罩（crop 局部坐标），用于不规则切分
+            poly: b.poly || null,
+            bbox: b.bbox,
+            offset: b.offset,
+            mode: b.mode,
+            include: b.include,
+            anchor: b.bbox ? anchorFor(b) : null
+        };
+    });
+}
+
+var detectToken = 0;
+
+/**
+ * 识别矩阵块内容区域。
+ *
+ * mode:
+ *   "missing" —— 只补还没有内容框的块（导入新图时用，不打断已有工作）
+ *   "auto"    —— 重算所有自动块（改 alpha 阈值、改切分时用），
+ *                用户手动拖过的框保持不动
+ *   "all"     —— 连手动块一起重算（「全部重检」按钮）
+ */
+function detectAll(mode) {
+    if (mode === true) mode = "all";
+    if (!mode) mode = "missing";
+    var token = (detectToken += 1);
+    var list = state.blocks.filter(function (b) {
+        if (mode === "all") return true;
+        if (mode === "auto") return b.bboxMode !== "manual";
+        return !b.bbox;
+    });
+    var total = list.length;
+    if (total === 0) { refreshAll(); return; }
+    var i = 0;
+    setStatus("正在识别内容区域… 0/" + total);
+    $("progWrap").style.display = "";
+    $("progBar").style.width = "0%";
+
+    function step() {
+        if (token !== detectToken) return;
+        var end = Math.min(i + 6, total);
+        for (; i < end; i += 1) {
+            detectBlock(list[i]);
+            if (mode === "all") list[i].bboxMode = "auto";
+        }
+        $("progBar").style.width = Math.round(i / total * 100) + "%";
+        setStatus("正在识别内容区域… " + i + "/" + total);
+        if (i < total) {
+            setTimeout(step, 0);
+            return;
+        }
+        $("progWrap").style.display = "none";
+        $("progBar").style.width = "100%";
+        var emptyCount = state.blocks.filter(function (b) { return b.empty; }).length;
+        $("detectInfo").textContent = "已识别 " + state.blocks.length + " 块" +
+            (emptyCount ? " · " + emptyCount + " 块为全透明" : "");
+        // 导入时自动识别过网格的话，这里把结论说出来
+        if (state.pendingGridReport) {
+            var info = state.pendingGridReport;
+            state.pendingGridReport = null;
+            setStatus("内容识别完成 · 自动识别网格 " + info.cols + " 列 × " + info.rows + " 行" +
+                (info.methodX === "gutter" || info.methodY === "gutter" ? "（按透明空档）" : "（按等分推断）") +
+                " · 不对的话用「列 × 行 → 等分」或「格子尺寸」手动改");
+        } else {
+            setStatus("内容识别完成");
+        }
+        refreshAll();
+    }
+    setTimeout(step, 0);
+}
+
+/* ---------- 对齐 / 布局 ---------- */
+
+function recomputeOffsets() {
+    var items = alignItems();
+    state.offsets = computeAlignOffsets(items, state.anchor, state.baselineId, {
+        mode: state.exp.pivotMode,
+        x: state.exp.pivotX,
+        y: state.exp.pivotY
+    });
+    state.layout = computeExportLayout(items, state.offsets, {
+        mode: state.exp.frameMode,
+        padding: state.exp.pad
+    });
+    state.layout.pivot = computeExportPivot(items, state.offsets, state.anchor, state.layout);
+    state.layout.spread = computePivotSpread(items, state.offsets, state.anchor, state.layout, state.layout.pivot);
+    state.layout.target = computePivotTarget(items, state.anchor, state.baselineId, {
+        mode: state.exp.pivotMode,
+        x: state.exp.pivotX,
+        y: state.exp.pivotY
+    });
+}
+
+function realignAll() {
+    pushUndo("重新对齐");
+    state.blocks.forEach(function (b) { b.mode = "auto"; });
+    state.manual.moveId = null;
+    recomputeOffsets();
+    // 对齐结果在主画布上是「内容在格子里挪了位」，不切到对齐视图就看不出来，
+    // 容易让人以为重新对齐没生效 —— 所以这里自动打开。
+    setAlignedView(true);
+    refreshAll();
+    var t = state.layout.target || { x: 0, y: 0 };
+    setStatus("已对齐 " + exportableBlocks().length + " 帧：锚点统一落到格子内 (" +
+        rint(t.x) + ", " + rint(t.y) + ")，主画布已切到「对齐后」视图（淡影是原来的位置）");
+}
+
+/** 切换主画布的「对齐后」视图 */
+function setAlignedView(on) {
+    state.show.aligned = !!on;
+    // 分屏时两半同时展示原图与对齐后，单独的「对齐后」开关就没意义了
+    if (state.show.split) state.show.aligned = false;
+    var cb = $("showAligned");
+    if (cb) cb.checked = !!state.show.aligned;
+    syncSplitControls();
+}
+
+/** 切换分屏对比 */
+function setSplitView(on) {
+    state.show.split = !!on;
+    if (state.show.split) {
+        // 分屏时右半屏始终是对齐后，左半屏是原图，与「对齐后」开关无关
+        state.show.aligned = false;
+    }
+    var cb = $("showSplit");
+    if (cb) cb.checked = !!state.show.split;
+    syncSplitControls();
+}
+
+/**
+ * 「对齐后」与「分屏对比」是互斥的：分屏已经把两种视图同时摆出来了，
+ * 再让「对齐后」可点只会造成困惑，所以分屏时把它置灰。
+ */
+function syncSplitControls() {
+    var chip = $("alignedChip");
+    var cb = $("showAligned");
+    if (!chip || !cb) return;
+    var split = !!state.show.split;
+    cb.checked = !!state.show.aligned;
+    cb.disabled = split;
+    chip.style.opacity = split ? "0.45" : "1";
+    chip.title = split
+        ? "分屏时左右两半已经分别是原图与对齐后，无需单独切换"
+        : "按当前对齐结果在各自格子内平移内容 —— 看到的就是导出的样子";
+
+    var splitChip = $("splitChip");
+    if (splitChip) {
+        splitChip.className = "chip" + (split ? " on" : "");
+    }
+}
+
+/**
+ * 工作区里各图片源的位置。排列方向由「图片源」面板的 arrange 决定，
+ * 纯几何计算放在 CORE 的 computeSourceLayout 里，便于单测。
+ *
+ * 占位用「max(图片尺寸, 格子尺寸)」：归一化格子后单帧源的格子会比图片更宽，
+ * 按格子占位排才不会让格子边框伸进隔壁源（那样看起来像块叠在一起）。
+ */
+function sourceLayout() {
+    var max = computeMaxCell(state.blocks);
+    var sizes = state.sources.map(function (s) {
+        return {
+            id: s.id,
+            width: s.width,
+            height: s.height,
+            slotW: Math.max(s.width, max.w),
+            slotH: Math.max(s.height, max.h)
+        };
+    });
+    return computeSourceLayout(sizes, {
+        arrange: state.arrange,
+        cols: state.arrangeCols,
+        gap: 26
+    });
+}
+
+function layoutOfSource(sid) {
+    var items = sourceLayout().items;
+    for (var i = 0; i < items.length; i += 1) if (items[i].id === sid) return items[i];
+    return { id: sid, x: 0, y: 0 };
+}
+
+/** 块在源视图世界坐标中的矩形（格子本身的位置，不含对齐位移） */
+function blockWorldRect(b) {
+    var lo = layoutOfSource(b.sourceId);
+    return { x: lo.x + b.sx, y: lo.y + b.sy, w: b.sw, h: b.sh };
+}
+
+/**
+ * 该块在指定视图下的对齐位移。
+ * 「对齐后」视图里内容会按各自的 offset 在格子内平移 —— 这正是导出时会写出去的样子。
+ *
+ * aligned 必须显式传入：分屏对比时左半屏画原图、右半屏画对齐后，
+ * 靠全局状态判断会两边互相污染。
+ */
+function shiftOf(b, aligned) {
+    if (!aligned) return { x: 0, y: 0 };
+    // 不参与导出的块保持原位，这样一眼能看出它被排除了
+    if (b.include === false) return { x: 0, y: 0 };
+    return offsetOf(b.id);
+}
+
+/** 当前该用哪种视图：传入则用它，否则取工具栏勾选状态 */
+function alignedMode(aligned) {
+    return aligned === undefined ? !!state.show.aligned : !!aligned;
+}
+
+/**
+ * 把块切成「手动偏移」，并把**当前生效的偏移**存进 b.offset。
+ *
+ * 这一步不能省：手动模式读的是 b.offset，而自动块的 b.offset 一直是初始的 {0,0}。
+ * 只把 mode 改成 manual 而不回填 offset，偏移会瞬间归零 ——
+ * 多图横向排列时表现为内容横向跳几百像素（看起来像"所有帧一起乱动"）。
+ */
+function makeManualKeepOffset(b) {
+    if (!b) return;
+    var cur = offsetOf(b.id);
+    b.offset = { x: cur.x, y: cur.y };
+    b.mode = "manual";
+}
+
+/**
+ * 设置某块的内容框。
+ *
+ * 守住的约定：**编辑内容框只改裁切范围，任何图案都不在画面上移动。**
+ *
+ * 两件事要做：
+ *   1. 被编辑的那块 —— 把偏移反向补偿，使图案停在原处。
+ *      不能只靠"自动偏移"来抵消：像「脚底接触点」这种锚点是跟着内容算出来的
+ *      绝对坐标，内容框一移它不跟着移，自动偏移就补偿不了，图案会跟着框跑。
+ *   2. 其他帧 —— baseline 的落点取自基准块、median 的落点取自全体中位数，
+ *      所以改一帧会改变落点、把其他帧集体拽走（用户报的"4 张图一起动"）。
+ *      这里按编辑前的显示位置逐个补偿回去。
+ *
+ * 被编辑的块会转为手动偏移（用户正在手工调它，不该再被自动改动）。
+ * 返回 true 表示这次编辑牵涉到落点。
+ */
+function setBbox(b, next) {
+    if (!b || !b.bbox) return false;
+    var touchesPivot = (state.exp.pivotMode === "baseline" && b.id === state.baselineId) ||
+        state.exp.pivotMode === "median";
+
+    // 编辑前：记住每一帧在格子里的实际显示位置
+    var before = state.blocks.map(function (x) {
+        var o = offsetOf(x.id);
+        return { id: x.id, x: x.bbox.x + o.x, y: x.bbox.y + o.y };
+    });
+
+    b.bbox = {
+        x: rint(next.x), y: rint(next.y),
+        w: Math.max(1, rint(next.w)), h: Math.max(1, rint(next.h))
+    };
+    b.bboxMode = "manual";
+
+    // 1. 钉住被编辑块的图案
+    var self = null;
+    for (var i = 0; i < before.length; i += 1) if (before[i].id === b.id) self = before[i];
+    if (self) {
+        b.mode = "manual";
+        b.offset = { x: rint(self.x - b.bbox.x), y: rint(self.y - b.bbox.y) };
+    }
+    recomputeOffsets();
+
+    // 2. 把落点变化牵连到的其他帧拉回原位
+    if (touchesPivot) {
+        before.forEach(function (rec) {
+            if (rec.id === b.id) return;
+            var o = null;
+            for (var k = 0; k < state.blocks.length; k += 1) {
+                if (state.blocks[k].id === rec.id) o = state.blocks[k];
+            }
+            if (!o || !o.bbox) return;
+            var cur = offsetOf(rec.id);
+            var dx = rec.x - (o.bbox.x + cur.x);
+            var dy = rec.y - (o.bbox.y + cur.y);
+            if (dx === 0 && dy === 0) return;
+            o.mode = "manual";
+            o.offset = { x: cur.x + dx, y: cur.y + dy };
+        });
+        recomputeOffsets();
+    }
+    return touchesPivot;
+}
+
+function localToWorld(b, p, aligned) {
+    var lo = layoutOfSource(b.sourceId);
+    var cr = b.crop || { x: b.sx, y: b.sy, w: b.sw, h: b.sh };
+    var sh = shiftOf(b, alignedMode(aligned));
+    // 未对齐时内容就在源图的真实位置（crop 处）；对齐后按偏移落到格子里
+    var ox = alignedMode(aligned) ? (b.sx + sh.x) : cr.x;
+    var oy = alignedMode(aligned) ? (b.sy + sh.y) : cr.y;
+    return { x: lo.x + ox + p.x, y: lo.y + oy + p.y };
+}
+
+function bboxWorldRect(b, aligned) {
+    if (!b.bbox) return null;
+    var p = localToWorld(b, { x: b.bbox.x, y: b.bbox.y }, aligned);
+    return { x: p.x, y: p.y, w: b.bbox.w, h: b.bbox.h };
+}
+
+function anchorWorldPoint(b, aligned) {
+    if (!b.bbox) return null;
+    return localToWorld(b, computeAnchorLocal(b.bbox, anchorFor(b)), aligned);
+}
+
+/** 落点在给定视图下的世界坐标（落点本身固定在格子里，与视图无关） */
+function pivotWorldPoint(b) {
+    var lo = layoutOfSource(b.sourceId);
+    return { x: lo.x + b.sx + state.layout.target.x, y: lo.y + b.sy + state.layout.target.y };
+}
+
+/* ---------- 分屏 ---------- */
+
+/** 分屏时两半的分界 x（CSS px）；未分屏返回 null */
+function splitX() {
+    if (!state.show.split) return null;
+    return Math.round(stageCss.w * clamp(state.splitRatio, 0.2, 0.8));
+}
+
+/** 指针落在哪个半屏，并换算成该半屏内的局部坐标 */
+function pointerHalf(e) {
+    var rect = $("stage").getBoundingClientRect();
+    var x = e.clientX - rect.left;
+    var y = e.clientY - rect.top;
+    var sx = splitX();
+    if (sx == null) {
+        return { aligned: alignedMode(), localX: x, localY: y, splitX: null, onDivider: false };
+    }
+    // 分界线本身优先命中（它是界面元素，不该被内容抢走）
+    var onDivider = Math.abs(x - sx) <= 4;
+    if (x < sx) return { aligned: false, localX: x, localY: y, splitX: sx, onDivider: onDivider };
+    return { aligned: true, localX: x - sx, localY: y, splitX: sx, onDivider: onDivider };
+}
+
+/* ---------- 画布基础设施 ---------- */
+
+function setupCanvas(canvas) {
+    var dpr = window.devicePixelRatio || 1;
+    var rect = canvas.getBoundingClientRect();
+    var w = Math.max(1, Math.round(rect.width));
+    var h = Math.max(1, Math.round(rect.height));
+    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
+        canvas.width = Math.round(w * dpr);
+        canvas.height = Math.round(h * dpr);
+    }
+    return { w: w, h: h, dpr: dpr };
+}
+
+function makeChecker(ctx, x, y, w, h, size) {
+    var s = size || 8;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, w, h);
+    ctx.clip();
+    ctx.fillStyle = "#1b1e23";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = "#23272e";
+    var cols = Math.ceil(w / s);
+    var rows = Math.ceil(h / s);
+    for (var r = 0; r < rows; r += 1) {
+        for (var c = 0; c < cols; c += 1) {
+            if ((r + c) % 2 === 0) ctx.fillRect(x + c * s, y + r * s, s, s);
+        }
+    }
+    ctx.restore();
+}
+
+/* ---------- 源视图渲染 ---------- */
+
+var stageCss = { w: 1, h: 1 };
+
+function renderStage() {
+    var canvas = $("stage");
+    var info = setupCanvas(canvas);
+    stageCss = { w: info.w, h: info.h };
+    var ctx = canvas.getContext("2d");
+    var dpr = info.dpr;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    var sx = splitX();
+    if (sx == null) {
+        drawStageWorld(ctx, 0, 0, stageCss.w, stageCss.h, alignedMode(), "", dpr);
+    } else {
+        // 分屏：左半画原图、右半画对齐后，两半共用同一套 pan/zoom，位置天然一一对应
+        drawStageWorld(ctx, 0, 0, sx, stageCss.h, false, "原图", dpr);
+        drawStageWorld(ctx, sx, 0, stageCss.w - sx, stageCss.h, true, "对齐后", dpr);
+
+        // 分界线
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.strokeStyle = "rgba(120,132,150,0.75)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx + 0.5, 0);
+        ctx.lineTo(sx + 0.5, stageCss.h);
+        ctx.stroke();
+    }
+
+    $("zoomLabel").textContent = Math.round(state.view.scale * 100) + "%";
+}
+
+/**
+ * 在画布的一块矩形区域里画整个世界（源图 / 分割线 / 内容框 / 锚点 / 落点）。
+ * originX 是该区域在画布上的左边界（分屏时右半屏不为 0），
+ * 区域内部用同一套 view 变换，所以两半屏的 pan/zoom 完全同步。
+ */
+function drawStageWorld(ctx, originX, originY, width, height, aligned, label, dpr) {
+    if (width <= 1 || height <= 1) return;
+    var v = state.view;
+
+    ctx.save();
+    // 裁剪必须先在「CSS 像素」坐标系里建好，再切到世界变换。
+    // 顺序反了的话，rect 会按设备像素裁 —— 在高 DPI 屏（dpr≠1）上
+    // 就只能画出左上角 1/dpr 那一块，右边和底部被整齐地切掉。
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.beginPath();
+    ctx.rect(originX, originY, width, height);
+    ctx.clip();
+    ctx.setTransform(v.scale * dpr, 0, 0, v.scale * dpr,
+        (v.tx + originX) * dpr, (v.ty + originY) * dpr);
+    ctx.imageSmoothingEnabled = false;
+
+    drawStageContent(ctx, aligned, v);
+
+    ctx.restore();
+
+    // 半屏标签（画在未平移的坐标里，固定在左上角）
+    if (label) {
+        ctx.save();
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.font = "11px 'Segoe UI', 'Microsoft YaHei', sans-serif";
+        ctx.textBaseline = "top";
+        var tw = ctx.measureText(label).width;
+        var bx = originX + 10;
+        var by = originY + 10;
+        ctx.fillStyle = "rgba(20,22,26,0.82)";
+        ctx.fillRect(bx - 5, by - 3, tw + 10, 17);
+        ctx.strokeStyle = aligned ? "rgba(62,207,142,0.85)" : "rgba(120,132,150,0.7)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(bx - 4.5, by - 2.5, tw + 9, 16);
+        ctx.fillStyle = aligned ? "#7de2b0" : "#c3ccd9";
+        ctx.fillText(label, bx, by);
+        ctx.restore();
+    }
+}
+
+function drawStageContent(ctx, aligned, v) {
+    var L = sourceLayout();
+    var lineW = 1 / v.scale;
+    // 归一化格子后，源的「格子占位」可能比图片本身大。
+    // 棋盘格按占位尺寸铺，这样每一帧看起来是一块一样大的画布 ——
+    // 与导出结果一致，不会出现"图片只有半格、另一半是空的"这种困惑。
+    var maxCell = computeMaxCell(state.blocks);
+
+    for (var i = 0; i < state.sources.length; i += 1) {
+        var s = state.sources[i];
+        var pos = L.items[i];
+        var slotW = Math.max(s.width, maxCell.w);
+        var slotH = Math.max(s.height, maxCell.h);
+        makeChecker(ctx, pos.x, pos.y, slotW, slotH, 8);
+
+        if (!aligned) {
+            ctx.drawImage(s.img, pos.x, pos.y);
+        } else {
+            // 对齐视图：先把原图淡淡铺一层当参照，再按各块的 offset 把内容摆到对齐后的位置。
+            // 亮的地方就是「内容要挪到这里」，暗影就是它原来的位置。
+            ctx.globalAlpha = 0.18;
+            ctx.drawImage(s.img, pos.x, pos.y);
+            ctx.globalAlpha = 1;
+
+            for (var bi = 0; bi < state.blocks.length; bi += 1) {
+                var blk0 = state.blocks[bi];
+                if (blk0.sourceId !== s.id) continue;
+                var sh0 = shiftOf(blk0, true);
+                var cr0 = blk0.crop || { x: blk0.sx, y: blk0.sy, w: blk0.sw, h: blk0.sh };
+                // 把 crop 那块源图搬到「新格子 + 偏移」处；
+                // 有裁剪框时同时把格子外溢出来的部分切掉，和导出口径一致
+                ctx.save();
+                ctx.beginPath();
+                ctx.rect(pos.x + blk0.sx + sh0.x, pos.y + blk0.sy + sh0.y, blk0.sw, blk0.sh);
+                if (blk0.crop) ctx.clip();
+                drawBlockSlice(ctx, s.img, blk0, cr0, pos.x + blk0.sx + sh0.x, pos.y + blk0.sy + sh0.y);
+                ctx.restore();
+            }
+        }
+
+        ctx.lineWidth = lineW;
+        ctx.strokeStyle = s.id === state.selectedSourceId ? "#4ea1ff" : "#3a4150";
+        ctx.strokeRect(pos.x - 0.5 * lineW, pos.y - 0.5 * lineW, s.width + lineW, s.height + lineW);
+
+        // 重新等分后，格子与内容来源不再是同一处：用虚线把 crop 标出来，
+        // 让用户看懂「这一格的内容其实取自那块区域」
+        if (!aligned) {
+            for (var ci = 0; ci < state.blocks.length; ci += 1) {
+                var cb = state.blocks[ci];
+                if (cb.sourceId !== s.id || !cb.crop) continue;
+                ctx.setLineDash([4 / v.scale, 3 / v.scale]);
+                ctx.lineWidth = 1 / v.scale;
+                ctx.strokeStyle = "rgba(247,217,76,0.8)";
+                ctx.strokeRect(pos.x + cb.crop.x, pos.y + cb.crop.y, cb.crop.w, cb.crop.h);
+                ctx.setLineDash([]);
+            }
+        }
+    }
+
+    if (state.show.cuts) {
+        for (var j = 0; j < state.sources.length; j += 1) {
+            var src = state.sources[j];
+            var p = L.items[j];
+            var hover = state.hoverCut;
+            ctx.lineWidth = Math.max(lineW, 1 / v.scale);
+            for (var a = 0; a < src.cutsX.length; a += 1) {
+                var hx = hover && hover.sourceId === src.id && hover.axis === "x" && hover.index === a;
+                ctx.strokeStyle = hx ? "#ff9f43" : "#4ea1ff";
+                ctx.beginPath();
+                ctx.moveTo(p.x + src.cutsX[a], p.y - 4 / v.scale);
+                ctx.lineTo(p.x + src.cutsX[a], p.y + src.height + 4 / v.scale);
+                ctx.stroke();
+            }
+            for (var b2 = 0; b2 < src.cutsY.length; b2 += 1) {
+                var hy = hover && hover.sourceId === src.id && hover.axis === "y" && hover.index === b2;
+                ctx.strokeStyle = hy ? "#ff9f43" : "#4ea1ff";
+                ctx.beginPath();
+                ctx.moveTo(p.x - 4 / v.scale, p.y + src.cutsY[b2]);
+                ctx.lineTo(p.x + src.width + 4 / v.scale, p.y + src.cutsY[b2]);
+                ctx.stroke();
+            }
+        }
+    }
+
+    var fs = Math.max(8, 10 / v.scale);
+    ctx.font = fs + "px sans-serif";
+    ctx.textBaseline = "top";
+    for (var k = 0; k < state.blocks.length; k += 1) {
+        var blk = state.blocks[k];
+        var r = blockWorldRect(blk);
+        var sel = blk.id === state.selectedBlockId;
+
+        if (state.show.bbox) {
+            ctx.lineWidth = 1 / v.scale;
+            ctx.strokeStyle = sel ? "#4ea1ff" : "#2f3745";
+            ctx.strokeRect(r.x + 0.5 / v.scale, r.y + 0.5 / v.scale, r.w - 1 / v.scale, r.h - 1 / v.scale);
+        }
+
+        if (blk.bbox) {
+            var br = bboxWorldRect(blk, aligned);
+            ctx.lineWidth = (sel ? 1.4 : 0.9) / v.scale;
+            ctx.strokeStyle = blk.include === false ? "#5c6472" : (sel ? "#7de2b0" : "#3ecf8e");
+            ctx.setLineDash(blk.include === false ? [4 / v.scale, 3 / v.scale] : []);
+            ctx.strokeRect(br.x, br.y, br.w, br.h);
+            ctx.setLineDash([]);
+            if (blk.include !== false) {
+                ctx.fillStyle = "rgba(62,207,142,0.10)";
+                ctx.fillRect(br.x, br.y, br.w, br.h);
+            }
+
+            if (state.show.anchor) {
+                var ap = anchorWorldPoint(blk, aligned);
+                var arm = 5 / v.scale;
+                ctx.strokeStyle = "#ff9f43";
+                ctx.lineWidth = 1.2 / v.scale;
+                ctx.beginPath();
+                ctx.moveTo(ap.x - arm, ap.y);
+                ctx.lineTo(ap.x + arm, ap.y);
+                ctx.moveTo(ap.x, ap.y - arm);
+                ctx.lineTo(ap.x, ap.y + arm);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.arc(ap.x, ap.y, 2.2 / v.scale, 0, Math.PI * 2);
+                ctx.fillStyle = "#ff9f43";
+                ctx.fill();
+            }
+
+            if (sel) {
+                var hs = 4 / v.scale;
+                ctx.fillStyle = "#4ea1ff";
+                [[br.x, br.y], [br.x + br.w, br.y], [br.x + br.w, br.y + br.h], [br.x, br.y + br.h]]
+                    .forEach(function (c) { ctx.fillRect(c[0] - hs, c[1] - hs, hs * 2, hs * 2); });
+            }
+        }
+
+        if (state.show.index && v.scale > 0.25) {
+            var lbl = String(state.blocks.indexOf(blk) + 1);
+            ctx.fillStyle = sel ? "#cfe6ff" : "rgba(200,210,225,0.42)";
+            ctx.fillText(lbl, r.x + 3 / v.scale, r.y + 3 / v.scale);
+            if (blk.mode === "manual") {
+                ctx.fillStyle = "#e8b23a";
+                ctx.fillText("M", r.x + 3 / v.scale + ctx.measureText(lbl).width + 3 / v.scale, r.y + 3 / v.scale);
+            }
+        }
+    }
+
+    // 落点标记：在每格里画出「锚点最终要落到哪」。
+    // 画在块循环之后，所以它在最上层；用空心环，橙色锚点正好落进环心时
+    // 视觉上就是「套住了」，一眼能看出这一帧已经对齐。
+    if (state.show.pivot && state.layout && state.layout.target && v.scale > 0.2) {
+        var tgt = state.layout.target;
+        var tgtMode = state.exp.pivotMode;
+        var tgtColor = tgtMode === "baseline" ? "#6ee7ff"
+            : (tgtMode === "median" ? "#a78bfa" : "#f472b6");
+        // 贯穿格子的虚线在缩得很小时既看不清又费绘制次数，缩小到一定程度就只留环
+        var drawGuides = v.scale >= 0.5;
+        for (var q = 0; q < state.blocks.length; q += 1) {
+            var tb = state.blocks[q];
+            if (!tb.bbox || tb.include === false) continue;
+            var tlo = layoutOfSource(tb.sourceId);
+            var tw = pivotWorldPoint(tb);
+            var selQ = tb.id === state.selectedBlockId;
+
+            ctx.strokeStyle = tgtColor;
+            ctx.lineWidth = (selQ ? 1.3 : 0.9) / v.scale;
+
+            // 贯穿格子的虚线，标出落点的行/列
+            if (drawGuides) {
+                ctx.setLineDash([3 / v.scale, 3 / v.scale]);
+                ctx.beginPath();
+                ctx.moveTo(tw.x, tlo.y + tb.sy);
+                ctx.lineTo(tw.x, tlo.y + tb.sy + tb.sh);
+                ctx.moveTo(tlo.x + tb.sx, tw.y);
+                ctx.lineTo(tlo.x + tb.sx + tb.sw, tw.y);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // 空心环 + 十字，环心留给橙色锚点。
+            // 环线刻意画粗一点：细线在 1x 缩放下只剩半像素，抗锯齿会把颜色洗淡到
+            // 认不出是哪个色标；加粗后用颜色区分落点模式才真正有效。
+            var rr = 5 / v.scale;
+            var ringW = Math.max(1.6 / v.scale, 0.6);
+            ctx.lineWidth = ringW;
+            ctx.beginPath();
+            ctx.arc(tw.x, tw.y, rr, 0, Math.PI * 2);
+            ctx.stroke();
+
+            ctx.lineWidth = Math.max(1.2 / v.scale, 0.5);
+            var tick = 9 / v.scale;
+            ctx.beginPath();
+            ctx.moveTo(tw.x - tick, tw.y);
+            ctx.lineTo(tw.x - rr - 1 / v.scale, tw.y);
+            ctx.moveTo(tw.x + rr + 1 / v.scale, tw.y);
+            ctx.lineTo(tw.x + tick, tw.y);
+            ctx.moveTo(tw.x, tw.y - tick);
+            ctx.lineTo(tw.x, tw.y - rr - 1 / v.scale);
+            ctx.moveTo(tw.x, tw.y + rr + 1 / v.scale);
+            ctx.lineTo(tw.x, tw.y + tick);
+            ctx.stroke();
+        }
+    }
+
+    // 选中块的「锚点 → 落点」位移矢量，给个精确的直观读数
+    if (state.show.pivot && state.layout && state.layout.target) {
+        var sblk = blockById(state.selectedBlockId);
+        if (sblk && sblk.bbox) {
+            var slo = layoutOfSource(sblk.sourceId);
+            var aPt = anchorWorldPoint(sblk, aligned);
+            var tPt = {
+                x: slo.x + sblk.sx + state.layout.target.x,
+                y: slo.y + sblk.sy + state.layout.target.y
+            };
+            if (Math.abs(aPt.x - tPt.x) > 0.01 || Math.abs(aPt.y - tPt.y) > 0.01) {
+                ctx.strokeStyle = "rgba(255,159,67,0.75)";
+                ctx.lineWidth = 1 / v.scale;
+                ctx.beginPath();
+                ctx.moveTo(aPt.x, aPt.y);
+                ctx.lineTo(tPt.x, tPt.y);
+                ctx.stroke();
+                // 箭头
+                var ang = Math.atan2(tPt.y - aPt.y, tPt.x - aPt.x);
+                var ah = 6 / v.scale;
+                ctx.beginPath();
+                ctx.moveTo(tPt.x, tPt.y);
+                ctx.lineTo(tPt.x - ah * Math.cos(ang - 0.4), tPt.y - ah * Math.sin(ang - 0.4));
+                ctx.moveTo(tPt.x, tPt.y);
+                ctx.lineTo(tPt.x - ah * Math.cos(ang + 0.4), tPt.y - ah * Math.sin(ang + 0.4));
+                ctx.stroke();
+            }
+        }
+    }
+
+    // 多边形遮罩：已有的画成实线，正在套索的画成虚线 + 顶点
+    drawPolys(ctx, v);
+    drawLasso(ctx, v);
+
+    // 手动对齐的两块在源视图里也高亮一下，方便找到它们在哪个格子
+    if (state.manual.on && state.manual.moveId && state.manual.refId) {
+        var mb = blockById(state.manual.moveId);
+        var rb = blockById(state.manual.refId);
+        if (mb && rb && mb.bbox && rb.bbox) {
+            var mr = bboxWorldRect(mb, aligned);
+            var rr = bboxWorldRect(rb, aligned);
+            ctx.lineWidth = 1 / v.scale;
+            ctx.setLineDash([5 / v.scale, 4 / v.scale]);
+            ctx.strokeStyle = "rgba(255,159,67,0.9)";
+            ctx.strokeRect(mr.x, mr.y, mr.w, mr.h);
+            ctx.strokeStyle = "rgba(78,161,255,0.9)";
+            ctx.strokeRect(rr.x, rr.y, rr.w, rr.h);
+            ctx.setLineDash([]);
+        }
+    }
+}
+
+/**
+ * 适应窗口。分屏时按半个屏的宽度来算，否则两半都会只看到图像的一半。
+ */
+function fitStage() {
+    var L = sourceLayout();
+    var sx = splitX();
+    var availW = sx == null ? stageCss.w : Math.max(40, sx - 12);
+    state.view.fit(L.width, L.height, availW, stageCss.h, 24, 16);
+    renderStage();
+}
+
+/* ---------- 源视图交互 ---------- */
+
+var drag = null;
+// 多边形套索：正在给某个块画遮罩时，这里存已点下的顶点（crop 局部坐标）
+var lasso = null;
+var spaceDown = false;
+
+function stagePos(e) {
+    var rect = $("stage").getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+/**
+ * 一次把「指针所在半屏 + 该半屏的局部屏幕坐标 + 世界坐标」都算出来。
+ * 分屏时两半共用同一套 view，所以局部坐标直接喂给 view.toWorld 就是对的。
+ */
+function stagePick(e) {
+    var h = pointerHalf(e);
+    return {
+        screen: { x: h.localX, y: h.localY },
+        world: state.view.toWorld(h.localX, h.localY),
+        aligned: h.aligned,
+        splitX: h.splitX,
+        onDivider: h.onDivider
+    };
+}
+
+/** 命中分割线（屏幕 6px 内） */
+function hitCut(sp) {
+    var v = state.view;
+    var L = sourceLayout();
+    var tol = 6;
+    var best = null;
+    for (var i = 0; i < state.sources.length; i += 1) {
+        var s = state.sources[i];
+        var p = L.items[i];
+        var top = v.toScreen(p.x, p.y).y;
+        var bottom = v.toScreen(p.x, p.y + s.height).y;
+        var left = v.toScreen(p.x, 0).x;
+        var right = v.toScreen(p.x + s.width, 0).x;
+
+        if (sp.y >= top - 8 && sp.y <= bottom + 8) {
+            for (var a = 0; a < s.cutsX.length; a += 1) {
+                var sx = v.toScreen(p.x + s.cutsX[a], 0).x;
+                var d = Math.abs(sp.x - sx);
+                if (d <= tol && (!best || d < best.d)) {
+                    best = { sourceId: s.id, axis: "x", index: a, d: d };
+                }
+            }
+        }
+        if (sp.x >= left - 8 && sp.x <= right + 8) {
+            for (var b = 0; b < s.cutsY.length; b += 1) {
+                var sy = v.toScreen(0, p.y + s.cutsY[b]).y;
+                var d2 = Math.abs(sp.y - sy);
+                if (d2 <= tol && (!best || d2 < best.d)) {
+                    best = { sourceId: s.id, axis: "y", index: b, d: d2 };
+                }
+            }
+        }
+    }
+    return best;
+}
+
+/** 命中选中块内容框的角手柄（屏幕 8px 内） */
+function hitBboxHandle(sp, aligned) {
+    var b = blockById(state.selectedBlockId);
+    if (!b || !b.bbox) return null;
+    var br = bboxWorldRect(b, aligned);
+    var v = state.view;
+    var corners = [
+        { name: "lt", x: br.x, y: br.y },
+        { name: "rt", x: br.x + br.w, y: br.y },
+        { name: "rb", x: br.x + br.w, y: br.y + br.h },
+        { name: "lb", x: br.x, y: br.y + br.h }
+    ];
+    for (var i = 0; i < corners.length; i += 1) {
+        var sp2 = v.toScreen(corners[i].x, corners[i].y);
+        if (Math.hypot(sp2.x - sp.x, sp2.y - sp.y) <= 8) return corners[i].name;
+    }
+    return null;
+}
+
+function bboxHit(b, wp, aligned) {
+    if (!b.bbox) return false;
+    var br = bboxWorldRect(b, aligned);
+    return wp.x >= br.x && wp.x <= br.x + br.w && wp.y >= br.y && wp.y <= br.y + br.h;
+}
+
+/** 命中矩阵块（世界坐标，后画的块优先） */
+function hitBlock(wp, aligned) {
+    for (var i = state.blocks.length - 1; i >= 0; i -= 1) {
+        var b = state.blocks[i];
+        var r = blockWorldRect(b);
+        if (wp.x >= r.x && wp.x <= r.x + r.w && wp.y >= r.y && wp.y <= r.y + r.h) {
+            return { block: b, inBBox: bboxHit(b, wp, aligned) };
+        }
+    }
+    return null;
+}
+
+function sourceAt(wp) {
+    var L = sourceLayout();
+    for (var i = 0; i < state.sources.length; i += 1) {
+        var s = state.sources[i];
+        var p = L.items[i];
+        if (wp.x >= p.x && wp.x <= p.x + s.width && wp.y >= p.y && wp.y <= p.y + s.height) {
+            return { src: s, pos: p };
+        }
+    }
+    return null;
+}
+
+/**
+ * 开始给选中块画多边形遮罩。
+ *
+ * **不要求块已经有内容框** —— 套索本来就是在"指定内容区域"，
+ * 没有内容框时正好由它来定义。刚拖过分割线、内容框还没识别时也能直接用。
+ */
+function startLasso() {
+    // 已经在套索中就不再重置 —— 否则「空格+拖动」平移时按空格会重新激活按钮焦点，
+    // 触发一次 startLasso 把已点的顶点全清掉。
+    if (lasso) {
+        setStatus("套索进行中（已 " + lasso.pts.length + " 个顶点）：左键加点，右键/Enter 结束，Esc 取消");
+        return;
+    }
+    var b = blockById(state.selectedBlockId);
+    if (!b) { setStatus("先选中一个块（左侧「帧 / 矩阵块」列表里点一个）"); return; }
+    lasso = { blockId: b.id, pts: [] };
+    setStatus("套索：依次点击顶点，右键或 Enter 结束，Esc 取消；中键/空格+拖动平移；Backspace 撤销上一个顶点");
+    renderStage();
+}
+
+/**
+ * 给块设置多边形遮罩（唯一入口）：写入 poly、按遮罩重算内容框、刷新偏移。
+ * finishLasso 与「清除遮罩」都走这里，避免各处漏调某一步。
+ */
+function applyPolyToBlock(b, pts) {
+    if (!b) return;
+    b.poly = (pts && pts.length >= 3) ? pts : null;
+    if (b.poly) {
+        // 套索直接定义内容区域，不依赖原有内容框
+        redetectPolyContent(b);
+    } else if (b.bbox) {
+        detectBlock(b);
+    }
+    recomputeOffsets();
+    refreshAll();
+}
+
+/** 结束套索：顶点够 3 个就写入块的多边形遮罩 */
+function finishLasso() {
+    if (!lasso) return;
+    var pts = lasso.pts.slice();
+    var b = blockById(lasso.blockId);
+    lasso = null;
+    if (!b) { renderStage(); return; }
+    if (pts.length < 3) {
+        setStatus("套索顶点不足 3 个，已取消");
+        renderStage();
+        return;
+    }
+    pushUndo("多边形遮罩");
+    applyPolyToBlock(b, pts);
+    var pb = polyBounds(pts);
+    setStatus("已为 " + blockLabel(b) + " 设置多边形遮罩（" + pts.length + " 个顶点，包围盒 " +
+        pb.w + "×" + pb.h + "，内容框 " + b.bbox.w + "×" + b.bbox.h + "）");
+}
+
+/** 取消套索 */
+function cancelLasso() {
+    if (!lasso) return;
+    lasso = null;
+    setStatus("已取消套索");
+    renderStage();
+}
+
+/**
+ * 按多边形重新计算内容框。
+ *
+ * 语义：**套索圈定的范围就是这一帧的内容区域** —— 内容框应当刚好框住套索，
+ * 而不是"套索里不透明像素的包围盒"。两者差别很大：
+ * 套索边缘留白时，用像素包围盒会让内容框偏小、中心偏移，
+ * 于是「内容框中心 + 居中」得到的位置并不是用户圈出来的那个中心。
+ *
+ * poly 是源图绝对坐标；crop 直接取多边形的包围盒（裁到源图内），
+ * bbox = {0,0,crop.w,crop.h}（相对 crop）。
+ */
+function redetectPolyContent(b) {
+    var src = sourceById(b.sourceId);
+    if (!src) return;
+    var pb = polyBounds(b.poly);
+    if (!pb) { detectBlock(b); return; }
+
+    // 多边形包围盒裁到源图内
+    var x0 = clamp(pb.x, 0, src.width - 1);
+    var y0 = clamp(pb.y, 0, src.height - 1);
+    var x1 = clamp(pb.x + pb.w, 1, src.width);
+    var y1 = clamp(pb.y + pb.h, 1, src.height);
+    if (x1 <= x0 || y1 <= y0) { b.empty = true; return; }
+
+    b.crop = { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
+    b.bbox = { x: 0, y: 0, w: b.crop.w, h: b.crop.h };
+    b.empty = false;
+
+    // 脚底接触带仍按像素算（它要的是"真正踩地的位置"，不是套索边界）
+    var data = blockImageData(b);
+    if (data) {
+        b.foot = detectFootBand(data, b.crop.w, b.crop.h, b.bbox, state.threshold, FOOT_BAND_RATIO);
+    }
+    b._thumb = null;
+}
+
+/**
+ * 画出各块已设置的多边形遮罩。
+ *
+ * 和内容框一个口径：**未对齐时画在源图真实位置，对齐后跟着偏移落到格子里**。
+ * 遮罩本身就相当于"多边形的内容框"，显示逻辑必须和内容框一致，
+ * 否则用户看到遮罩没动、内容框动了，会以为遮罩没生效。
+ */
+function drawPolys(ctx, v) {
+    for (var i = 0; i < state.blocks.length; i += 1) {
+        var b = state.blocks[i];
+        if (!b.poly || b.poly.length < 3) continue;
+        var lo = layoutOfSource(b.sourceId);
+        var cr = b.crop || { x: b.sx, y: b.sy, w: b.sw, h: b.sh };
+        var alignedNow = alignedMode();
+        var sh = shiftOf(b, alignedNow);
+        // 与 localToWorld 同口径
+        var ox = lo.x + (b.crop ? (alignedNow ? b.sx + sh.x : cr.x) : cr.x);
+        var oy = lo.y + (b.crop ? (alignedNow ? b.sy + sh.y : cr.y) : cr.y);
+
+        ctx.lineWidth = 1.2 / v.scale;
+        ctx.strokeStyle = b.id === state.selectedBlockId ? "#f7d94c" : "rgba(247,217,76,0.55)";
+        ctx.beginPath();
+        for (var k = 0; k < b.poly.length; k += 1) {
+            // poly 是源图绝对坐标，换算到「crop 原点」的相对位置
+            var px = ox + (b.poly[k].x - cr.x);
+            var py = oy + (b.poly[k].y - cr.y);
+            if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.stroke();
+    }
+}
+
+/** 画出正在套索的折线（虚线 + 顶点小方块）；同样跟随对齐视图 */
+function drawLasso(ctx, v) {
+    if (!lasso || lasso.pts.length === 0) return;
+    var b = blockById(lasso.blockId);
+    if (!b) return;
+    var lo = layoutOfSource(b.sourceId);
+    var cr = b.crop || { x: b.sx, y: b.sy, w: b.sw, h: b.sh };
+    var alignedNow = alignedMode();
+    var sh = shiftOf(b, alignedNow);
+    var ox = lo.x + (b.crop ? (alignedNow ? b.sx + sh.x : cr.x) : cr.x);
+    var oy = lo.y + (b.crop ? (alignedNow ? b.sy + sh.y : cr.y) : cr.y);
+    // 正在套索时 crop 可能还没建立，顶点是源图绝对坐标，直接用源的相对位置
+    var baseX = b.crop ? cr.x : 0;
+    var baseY = b.crop ? cr.y : 0;
+    if (!b.crop) { ox = lo.x; oy = lo.y; }
+
+    ctx.setLineDash([4 / v.scale, 3 / v.scale]);
+    ctx.lineWidth = 1.4 / v.scale;
+    ctx.strokeStyle = "#f7d94c";
+    ctx.beginPath();
+    for (var k = 0; k < lasso.pts.length; k += 1) {
+        var px = ox + (lasso.pts[k].x - baseX);
+        var py = oy + (lasso.pts[k].y - baseY);
+        if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    var hs = 3 / v.scale;
+    ctx.fillStyle = "#f7d94c";
+    for (var j = 0; j < lasso.pts.length; j += 1) {
+        ctx.fillRect(ox + (lasso.pts[j].x - baseX) - hs, oy + (lasso.pts[j].y - baseY) - hs, hs * 2, hs * 2);
+    }
+}
+
+function onStageDown(e) {
+    var pick = stagePick(e);
+    var sp = pick.screen;
+    var wp = pick.world;
+
+    // 多边形套索进行中：
+    //   左键 = 加顶点
+    //   中键 / 空格+拖动 = 平移画布（套索时最需要挪视野）
+    //   右键 / Enter = 结束并闭合
+    //   注意：平移必须走"不改 lasso.pts"的路径，否则拖一下就把已点的顶点弄没了
+    if (lasso) {
+        if (e.button === 1 || spaceDown) {
+            state.viewTouched = true;
+            drag = { kind: "pan", sx: sp.x, sy: sp.y, tx: state.view.tx, ty: state.view.ty };
+            e.preventDefault();
+            return;
+        }
+        if (e.button === 2) {
+            e.preventDefault();
+            finishLasso();
+            return;
+        }
+        if (e.button === 0) {
+            // 顶点存源图绝对坐标。对齐视图下格子被平移过，要先把偏移减掉，
+            // 否则套出来的多边形会整体错位（而且之后重新等分会用到错位的遮罩）。
+            var lb = blockById(lasso.blockId);
+            var lo2 = layoutOfSource(lb.sourceId);
+            var sh2 = shiftOf(lb, pick.aligned);
+            lasso.pts.push({
+                x: rint(wp.x - lo2.x - sh2.x),
+                y: rint(wp.y - lo2.y - sh2.y)
+            });
+            renderStage();
+            e.preventDefault();
+            return;
+        }
+    }
+
+    // 分屏时先看是不是抓分界线（它是界面元素，优先于内容）
+    if (pick.splitX != null && pick.onDivider && !spaceDown && e.button === 0) {
+        drag = { kind: "split", startX: e.clientX, startRatio: state.splitRatio };
+        e.preventDefault();
+        return;
+    }
+
+    if (e.button === 1 || spaceDown) {
+        drag = { kind: "pan", sx: sp.x, sy: sp.y, tx: state.view.tx, ty: state.view.ty };
+        e.preventDefault();
+        return;
+    }
+    if (e.button === 2) return;
+
+    var cut = hitCut(sp);
+    if (cut) {
+        pushUndo("移动分割线");
+        drag = { kind: "cut", cut: cut };
+        state.hoverCut = cut;
+        renderStage();
+        return;
+    }
+
+    var handle = hitBboxHandle(sp, pick.aligned);
+    if (handle) {
+        pushUndo("缩放内容框");
+        drag = { kind: "bboxHandle", handle: handle, blockId: state.selectedBlockId, aligned: pick.aligned };
+        return;
+    }
+
+    var hit = hitBlock(wp, pick.aligned);
+    if (hit) {
+        if (hit.block.id !== state.selectedBlockId) {
+            state.selectedBlockId = hit.block.id;
+            state.selectedSourceId = hit.block.sourceId;
+            renderLists();
+            syncInspector();
+            syncPreviewChips();
+        }
+        if (hit.inBBox) {
+            pushUndo("移动内容框");
+            drag = {
+                kind: "bboxMove",
+                blockId: hit.block.id,
+                start: wp,
+                origin: { x: hit.block.bbox.x, y: hit.block.bbox.y }
+            };
+        } else {
+            drag = { kind: "pan", sx: sp.x, sy: sp.y, tx: state.view.tx, ty: state.view.ty };
+        }
+        renderStage();
+        return;
+    }
+
+    drag = { kind: "pan", sx: sp.x, sy: sp.y, tx: state.view.tx, ty: state.view.ty };
+    renderStage();
+}
+
+function onStageMove(e) {
+    var pick = stagePick(e);
+    var sp = pick.screen;
+    var wp = pick.world;
+    var s = sourceAt(wp);
+    $("cursorInfo").textContent = s
+        ? Math.floor(wp.x - s.pos.x) + ", " + Math.floor(wp.y - s.pos.y)
+        : "—";
+
+    if (!drag) {
+        if (pick.onDivider) {
+            $("stage").style.cursor = "col-resize";
+            state.hoverCut = null;
+            return;
+        }
+        var hit = hitCut(sp);
+        var prev = state.hoverCut;
+        var changed = (hit ? hit.sourceId + hit.axis + hit.index : "") !==
+            (prev ? prev.sourceId + prev.axis + prev.index : "");
+        state.hoverCut = hit;
+        var cur = "";
+        if (hit) cur = hit.axis === "x" ? "col-resize" : "row-resize";
+        else if (hitBboxHandle(sp, pick.aligned)) cur = "nwse-resize";
+        else if (hitBlock(wp, pick.aligned)) cur = "move";
+        $("stage").style.cursor = cur;
+        if (changed) renderStage();
+        return;
+    }
+
+    if (drag.kind === "split") {
+        var rect = $("stage").getBoundingClientRect();
+        var deltaRatio = (e.clientX - drag.startX) / Math.max(1, rect.width);
+        state.splitRatio = clamp(drag.startRatio + deltaRatio, 0.2, 0.8);
+        renderStage();
+        return;
+    }
+
+    if (drag.kind === "pan") {
+        state.viewTouched = true;
+        state.view.tx = drag.tx + (sp.x - drag.sx);
+        state.view.ty = drag.ty + (sp.y - drag.sy);
+        renderStage();
+        return;
+    }
+
+    if (drag.kind === "cut") {
+        var src = sourceById(drag.cut.sourceId);
+        if (!src) return;
+        var pos = layoutOfSource(src.id);
+        var axis = drag.cut.axis;
+        var raw = axis === "x" ? wp.x - pos.x : wp.y - pos.y;
+        var size = axis === "x" ? src.width : src.height;
+        var val = clamp(rint(raw), 1, size - 1);
+        var arr = axis === "x" ? src.cutsX : src.cutsY;
+        arr[drag.cut.index] = val;
+        arr.sort(function (a, b) { return a - b; });
+        drag.cut.index = arr.indexOf(val);
+        rebuildBlocksFromCuts(true);
+        renderStage();
+        renderBlockList();
+        renderCutsList();
+        return;
+    }
+
+    if (drag.kind === "bboxMove") {
+        var b = blockById(drag.blockId);
+        if (!b || !b.bbox) return;
+        var nx = clamp(drag.origin.x + rint(wp.x - drag.start.x), 0, b.sw - b.bbox.w);
+        var ny = clamp(drag.origin.y + rint(wp.y - drag.start.y), 0, b.sh - b.bbox.h);
+        setBbox(b, { x: nx, y: ny, w: b.bbox.w, h: b.bbox.h });
+        renderStage();
+        syncInspector();
+        renderPreview();
+        return;
+    }
+
+    if (drag.kind === "bboxHandle") {
+        var blk = blockById(drag.blockId);
+        if (!blk || !blk.bbox) return;
+        var lo = layoutOfSource(blk.sourceId);
+        // 对齐视图下内容整体有位移，指针要先减掉它才能换回块内局部坐标。
+        // 用按下时所在半屏的视图模式，别用当前勾选状态（分屏时两半不同）。
+        var sh = shiftOf(blk, drag.aligned);
+        var nx0 = blk.bbox.x;
+        var ny0 = blk.bbox.y;
+        var nx1 = blk.bbox.x + blk.bbox.w;
+        var ny1 = blk.bbox.y + blk.bbox.h;
+        var lx = clamp(rint(wp.x - sh.x - lo.x - blk.sx), 0, blk.sw);
+        var ly = clamp(rint(wp.y - sh.y - lo.y - blk.sy), 0, blk.sh);
+        if (drag.handle === "lt") { nx0 = Math.min(lx, nx1 - 1); ny0 = Math.min(ly, ny1 - 1); }
+        if (drag.handle === "rt") { nx1 = Math.max(lx, nx0 + 1); ny0 = Math.min(ly, ny1 - 1); }
+        if (drag.handle === "rb") { nx1 = Math.max(lx, nx0 + 1); ny1 = Math.max(ly, ny0 + 1); }
+        if (drag.handle === "lb") { nx0 = Math.min(lx, nx1 - 1); ny1 = Math.max(ly, ny0 + 1); }
+        setBbox(blk, { x: nx0, y: ny0, w: nx1 - nx0, h: ny1 - ny0 });
+        renderStage();
+        syncInspector();
+        renderPreview();
+    }
+}
+
+function onStageUp() {
+    var was = drag;
+    drag = null;
+    if (was && was.kind !== "pan") refreshAll();
+}
+
+function onStageWheel(e) {
+    e.preventDefault();
+    state.viewTouched = true;
+    var pick = stagePick(e);
+    state.view.zoomAt(pick.screen.x, pick.screen.y, e.deltaY < 0 ? 1.12 : 1 / 1.12, 0.02, 32);
+    renderStage();
+}
+
+function onStageDblClick(e) {
+    var pick = stagePick(e);
+    var sp = pick.screen;
+    var wp = pick.world;
+    var hit = sourceAt(wp);
+    if (!hit) return;
+    var src = hit.src;
+    var axis = e.shiftKey ? "y" : "x";
+    var raw = axis === "y" ? wp.y - hit.pos.y : wp.x - hit.pos.x;
+    var size = axis === "y" ? src.height : src.width;
+    pushUndo("添加分割线");
+    var next = (axis === "y" ? src.cutsY : src.cutsX).concat([clamp(rint(raw), 1, size - 1)]);
+    if (axis === "y") src.cutsY = sanitizeCuts(next, size);
+    else src.cutsX = sanitizeCuts(next, size);
+    state.selectedSourceId = src.id;
+    $("colsInput").value = src.cutsX.length + 1;
+    $("rowsInput").value = src.cutsY.length + 1;
+    rebuildBlocksFromCuts(true);
+    detectAll("missing");
+    renderStage();
+    renderLists();
+    void sp;
+    setStatus("已添加" + (axis === "y" ? "横向" : "纵向") + "分割线（按住 Shift 双击加另一方向）");
+}
+
+/* ---------- 预览渲染 ---------- */
+
+/**
+ * 在「导出画布坐标系」里绘制重叠预览。
+ * 坐标系：块内局部坐标 + 该块 offset - 导出原点。
+ * 所有块共享同一坐标系，所以对齐正确时锚点会自然重合。
+ */
+function paintPreviewWorld(ctx, opts) {
+    var L = state.layout;
+    if (!L || L.frames.length === 0) {
+        ctx.fillStyle = "#5b6472";
+        ctx.font = "13px sans-serif";
+        ctx.fillText("没有可预览的帧：先导入图片并框选内容区域", 16, 28);
+        return;
+    }
+    var o = opts || {};
+    var onlyIndex = o.onlyIndex != null ? o.onlyIndex : null;
+    var opacity = o.opacity != null ? o.opacity : 1;
+    var scale = o.scale || 1;
+    var focusId = o.focusId || state.selectedBlockId;
+    // 手动对齐开启时这两块强制出现，否则没法对齐
+    var pair = state.manual.on ? [state.manual.moveId, state.manual.refId] : [];
+
+    makeChecker(ctx, 0, 0, L.width, L.height, 8);
+    ctx.strokeStyle = "rgba(120,132,150,0.5)";
+    ctx.lineWidth = 1 / scale;
+    ctx.strokeRect(0, 0, L.width, L.height);
+
+    var originX = L.minX;
+    var originY = L.minY;
+
+    for (var i = 0; i < state.blocks.length; i += 1) {
+        var b = state.blocks[i];
+        if (!b.bbox || b.include === false) continue;
+        var fi = -1;
+        for (var k = 0; k < L.frames.length; k += 1) if (L.frames[k].id === b.id) fi = k;
+        if (fi < 0) continue;
+
+        var show;
+        var alpha;
+        if (onlyIndex != null) {
+            show = fi === onlyIndex;
+            alpha = 1;
+        } else if (o.forceAll) {
+            show = true;
+            alpha = opacity * (b.opacity == null ? 1 : b.opacity);
+        } else if (o.refOnly) {
+            show = b.id === focusId;
+            alpha = opacity * (b.opacity == null ? 1 : b.opacity);
+        } else {
+            var isFocus = b.id === focusId;
+            var isPair = pair.indexOf(b.id) >= 0;
+            show = !!b.overlay || isFocus || isPair;
+            alpha = isFocus ? 1 : (isPair ? 0.85 : opacity * (b.opacity == null ? 1 : b.opacity));
+        }
+        if (!show) continue;
+
+        var src = sourceById(b.sourceId);
+        if (!src) continue;
+
+        // 用「导出布局算好的源矩形」来画，而不是 b.sx/b.sw。
+        // 重新等分之后，格子（帧槽位）与内容来源（crop）已经不是同一处，
+        // 只有走 layout 才能和真正导出的结果一致。
+        // cell 模式下 fr.dx = pad + off.x，正好等于预览坐标系（原点在 -pad）。
+        var fr = L.frames[fi];
+        var bx = fr.dx;
+        var by = fr.dy;
+
+        ctx.globalAlpha = clamp(alpha, 0, 1);
+        if (fr.poly && fr.poly.length >= 3) {
+            ctx.save();
+            ctx.beginPath();
+            for (var pi = 0; pi < fr.poly.length; pi += 1) {
+                var ppx = bx + fr.poly[pi].x;
+                var ppy = by + fr.poly[pi].y;
+                if (pi === 0) ctx.moveTo(ppx, ppy); else ctx.lineTo(ppx, ppy);
+            }
+            ctx.closePath();
+            ctx.clip();
+            ctx.drawImage(src.img, fr.sx, fr.sy, fr.sw, fr.sh, bx, by, fr.sw, fr.sh);
+            ctx.restore();
+        } else {
+            ctx.drawImage(src.img, fr.sx, fr.sy, fr.sw, fr.sh, bx, by, fr.sw, fr.sh);
+        }
+        ctx.globalAlpha = 1;
+
+        // 紧凑模式下画每块的格子左上角落点，用来看内容有没有被导出画布裁掉
+        if (L.mode !== "cell") {
+            ctx.strokeStyle = b.id === focusId ? "rgba(78,161,255,0.85)" : "rgba(140,152,170,0.35)";
+            ctx.lineWidth = 1 / scale;
+            if (bx >= -2 && bx <= L.width + 2) {
+                ctx.beginPath();
+                ctx.moveTo(bx, Math.max(0, by));
+                ctx.lineTo(bx, Math.min(L.height, by + b.sh));
+                ctx.stroke();
+            }
+            if (by >= -2 && by <= L.height + 2) {
+                ctx.beginPath();
+                ctx.moveTo(Math.max(0, bx), by);
+                ctx.lineTo(Math.min(L.width, bx + b.sw), by);
+                ctx.stroke();
+            }
+        }
+    }
+
+    // 原格子模式：画出帧的裁切边界 —— 内容越过这条线的部分会被裁掉
+    if (L.mode === "cell") {
+        ctx.strokeStyle = "rgba(78,161,255,0.55)";
+        ctx.lineWidth = 1 / scale;
+        ctx.setLineDash([4 / scale, 3 / scale]);
+        ctx.strokeRect(0.5 / scale, 0.5 / scale, L.width - 1 / scale, L.height - 1 / scale);
+        ctx.setLineDash([]);
+    }
+
+    // 锚点：所有帧共用的像素位置，也就是导出 JSON 里的 pivot
+    var pv = L.pivot;
+    ctx.strokeStyle = "#ff9f43";
+    ctx.lineWidth = 1.4 / scale;
+    var arm = 7 / scale;
+    ctx.beginPath();
+    ctx.moveTo(pv.x - arm, pv.y);
+    ctx.lineTo(pv.x + arm, pv.y);
+    ctx.moveTo(pv.x, pv.y - arm);
+    ctx.lineTo(pv.x, pv.y + arm);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(pv.x, pv.y, 2.5 / scale, 0, Math.PI * 2);
+    ctx.fillStyle = "#ff9f43";
+    ctx.fill();
+
+    // 手动对齐的吸附辅助线
+    var g = state.manual.guides || [];
+    for (var m = 0; m < g.length; m += 1) {
+        ctx.strokeStyle = "rgba(62,207,142,0.95)";
+        ctx.lineWidth = 1 / scale;
+        ctx.setLineDash([6 / scale, 4 / scale]);
+        ctx.beginPath();
+        if (g[m].axis === "x") {
+            ctx.moveTo(g[m].value, -40 / scale);
+            ctx.lineTo(g[m].value, L.height + 40 / scale);
+        } else if (g[m].axis === "y") {
+            ctx.moveTo(-40 / scale, g[m].value);
+            ctx.lineTo(L.width + 40 / scale, g[m].value);
+        } else {
+            ctx.moveTo(g[m].value - 9 / scale, g[m].value2);
+            ctx.lineTo(g[m].value + 9 / scale, g[m].value2);
+            ctx.moveTo(g[m].value, g[m].value2 - 9 / scale);
+            ctx.lineTo(g[m].value, g[m].value2 + 9 / scale);
+        }
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+}
+
+function renderPreview() {
+    var canvas = $("preview");
+    var info = setupCanvas(canvas);
+    var ctx = canvas.getContext("2d");
+    if (!state.layout) return;
+    var v = state.pview;
+    var dpr = info.dpr;
+
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.setTransform(v.scale * dpr, 0, 0, v.scale * dpr, v.tx * dpr, v.ty * dpr);
+    ctx.imageSmoothingEnabled = false;
+
+    paintPreviewWorld(ctx, {
+        scale: v.scale,
+        opacity: state.preview.opacity,
+        refOnly: state.preview.refOnly,
+        focusId: state.selectedBlockId,
+        onlyIndex: state.sim.playing ? state.sim.idx : null
+    });
+    $("previewOpacityVal").textContent = Math.round(state.preview.opacity * 100) + "%";
+}
+
+function fitPreview() {
+    var L = state.layout;
+    if (!L || L.width === 0) return;
+    var info = setupCanvas($("preview"));
+    state.pview.fit(L.width, L.height, info.w, info.h, 22, 8);
+    renderPreview();
+}
+
+/* ---------- 预览交互（手动对齐 + 平移缩放） ---------- */
+
+function previewPos(e) {
+    var rect = $("preview").getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function previewDown(e) {
+    var sp = previewPos(e);
+    var wp = state.pview.toWorld(sp.x, sp.y);
+    var L = state.layout;
+    if (!L) return;
+
+    if (state.manual.on) {
+        var b = blockById(state.manual.moveId);
+        if (b && b.bbox) {
+            var off = offsetOf(b.id);
+            // 整块范围都可抓，比只抓内容框更好按
+            if (wp.x >= off.x - L.minX - 6 && wp.x <= off.x - L.minX + b.sw + 6 &&
+                wp.y >= off.y - L.minY - 6 && wp.y <= off.y - L.minY + b.sh + 6) {
+                pushUndo("手动拖动对齐");
+                state.manual.drag = { blockId: b.id, start: wp, origin: { x: off.x, y: off.y } };
+                return;
+            }
+        }
+    }
+
+    state.manual.drag = null;
+    state.previewPan = { sx: sp.x, sy: sp.y, tx: state.pview.tx, ty: state.pview.ty };
+}
+
+function previewMove(e) {
+    var sp = previewPos(e);
+    var wp = state.pview.toWorld(sp.x, sp.y);
+    var L = state.layout;
+
+    if (state.manual.drag && L) {
+        var d = state.manual.drag;
+        var b = blockById(d.blockId);
+        var ref = blockById(state.manual.refId);
+        if (!b || !ref || !b.bbox || !ref.bbox) return;
+
+        var rawOff = {
+            x: d.origin.x + (wp.x - d.start.x),
+            y: d.origin.y + (wp.y - d.start.y)
+        };
+        var refOff = offsetOf(ref.id);
+        var movRect = {
+            x: b.bbox.x + rawOff.x - L.minX,
+            y: b.bbox.y + rawOff.y - L.minY,
+            w: b.bbox.w,
+            h: b.bbox.h
+        };
+        var refRect = {
+            x: ref.bbox.x + refOff.x - L.minX,
+            y: ref.bbox.y + refOff.y - L.minY,
+            w: ref.bbox.w,
+            h: ref.bbox.h
+        };
+        var a1 = computeAnchorLocal(b.bbox, anchorFor(b));
+        var a2 = computeAnchorLocal(ref.bbox, anchorFor(ref));
+
+        var guides = [];
+        var snapState = { x: false, y: false, point: false };
+        if (!e.altKey) {
+            var adj = computeSnapAdjust({
+                moving: movRect,
+                target: refRect,
+                movingAnchor: { x: a1.x + rawOff.x - L.minX, y: a1.y + rawOff.y - L.minY },
+                targetAnchor: { x: a2.x + refOff.x - L.minX, y: a2.y + refOff.y - L.minY },
+                radius: 8 / state.pview.scale,
+                prev: state.manual.snap
+            });
+            rawOff.x += adj.dx;
+            rawOff.y += adj.dy;
+            guides = adj.guides;
+            snapState = adj.snapped;
+        }
+
+        state.manual.snap = snapState;
+        state.manual.guides = guides;
+        b.offset = { x: rint(rawOff.x), y: rint(rawOff.y) };
+        b.mode = "manual";
+        b.overlay = true;
+        recomputeOffsets();
+        renderPreview();
+        syncInspector();
+        renderStage();
+        return;
+    }
+
+    if (state.previewPan) {
+        state.pview.tx = state.previewPan.tx + (sp.x - state.previewPan.sx);
+        state.pview.ty = state.previewPan.ty + (sp.y - state.previewPan.sy);
+        renderPreview();
+    }
+}
+
+function previewUp() {
+    var wasDrag = !!state.manual.drag;
+    var movedId = wasDrag ? state.manual.drag.blockId : null;
+    var snapped = state.manual.snap;
+    state.manual.drag = null;
+    state.previewPan = null;
+    if (wasDrag) {
+        state.manual.snap = { x: false, y: false, point: false };
+        state.manual.guides = [];
+        refreshAll();
+        var bits = [];
+        if (snapped.x) bits.push("水平边缘");
+        if (snapped.y) bits.push("垂直边缘");
+        if (snapped.point) bits.push("锚点");
+        setStatus("已手动对齐 " + blockLabel(blockById(movedId)) +
+            (bits.length ? "（吸附：" + bits.join(" / ") + "）" : "（自由移动）"));
+    }
+}
+
+function previewWheel(e) {
+    e.preventDefault();
+    var sp = previewPos(e);
+    state.pview.zoomAt(sp.x, sp.y, e.deltaY < 0 ? 1.12 : 1 / 1.12, 0.05, 12);
+    renderPreview();
+}
+
+/* ---------- 播放 ---------- */
+
+function tickSim(ts) {
+    if (!state.sim.playing) return;
+    var L = state.layout;
+    if (!L || L.frames.length === 0) { stopSim(); return; }
+    if (!state.sim.last) state.sim.last = ts;
+    state.sim.acc += ts - state.sim.last;
+    state.sim.last = ts;
+    var frameMs = 1000 / clamp(state.sim.fps, 1, 60);
+    if (state.sim.acc >= frameMs) {
+        var steps = Math.floor(state.sim.acc / frameMs);
+        state.sim.acc -= steps * frameMs;
+        state.sim.idx = (state.sim.idx + steps) % L.frames.length;
+        renderPreview();
+    }
+    state.sim.raf = requestAnimationFrame(tickSim);
+}
+
+function startSim() {
+    if (!state.layout || state.layout.frames.length === 0) { setStatus("没有可播放的帧"); return; }
+    state.sim.playing = true;
+    state.sim.last = 0;
+    state.sim.acc = 0;
+    state.sim.idx = 0;
+    state.sim.fps = clamp(parseInt($("fpsInput").value, 10) || 12, 1, 60);
+    $("playBtn").textContent = "■ 停止";
+    state.sim.raf = requestAnimationFrame(tickSim);
+}
+
+function stopSim() {
+    state.sim.playing = false;
+    if (state.sim.raf) cancelAnimationFrame(state.sim.raf);
+    state.sim.raf = 0;
+    $("playBtn").textContent = "▶ 播放";
+    renderPreview();
+}
+
+/* ---------- 列表渲染 ---------- */
+
+function makeThumb(b) {
+    if (b._thumb) return b._thumb;
+    var src = sourceById(b.sourceId);
+    if (!src) return "";
+    var size = 36;
+    var cv = document.createElement("canvas");
+    cv.width = size;
+    cv.height = size;
+    var ctx = cv.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+    ctx.fillStyle = "#14161a";
+    ctx.fillRect(0, 0, size, size);
+    var s = Math.min((size - 4) / b.sw, (size - 4) / b.sh);
+    var w = Math.max(1, Math.round(b.sw * s));
+    var h = Math.max(1, Math.round(b.sh * s));
+    var ox = Math.round((size - w) / 2);
+    var oy = Math.round((size - h) / 2);
+    ctx.drawImage(src.img, b.sx, b.sy, b.sw, b.sh, ox, oy, w, h);
+    if (b.bbox) {
+        ctx.strokeStyle = "#3ecf8e";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(ox + b.bbox.x * s, oy + b.bbox.y * s, Math.max(1, b.bbox.w * s), Math.max(1, b.bbox.h * s));
+    }
+    b._thumb = cv.toDataURL();
+    return b._thumb;
+}
+
+function renderSrcList() {
+    var box = $("srcList");
+    box.innerHTML = "";
+    $("srcCount").textContent = String(state.sources.length);
+    $("srcBadge").textContent = state.sources.length + " 张";
+    if (state.sources.length === 0) {
+        box.innerHTML = '<div class="hint" style="padding:8px 10px">还没有图片。点右上角「打开图片」，或把文件拖进窗口。<br />一张网格图会自动按 4×4 预切分；多张图则每张算一帧。</div>';
+        return;
+    }
+    state.sources.forEach(function (s, i) {
+        var el = document.createElement("div");
+        el.className = "item" + (s.id === state.selectedSourceId ? " sel" : "");
+        el.setAttribute("data-testid", "left.src.item");
+        var cols = s.kind === "frame" ? 1 : s.cutsX.length + 1;
+        var rows = s.kind === "frame" ? 1 : s.cutsY.length + 1;
+        el.innerHTML =
+            '<img class="thumb" alt="" src="' + s.url + '" />' +
+            '<div class="meta"><div class="name">S' + (i + 1) + " · " + escapeHtml(s.name) + "</div>" +
+            '<div class="sub">' + s.width + "×" + s.height + " · " + cols + "×" + rows +
+            (s.kind === "frame" ? ' · <span class="tag">单帧</span>' : "") + "</div></div>";
+        el.onclick = function () {
+            state.selectedSourceId = s.id;
+            $("colsInput").value = cols;
+            $("rowsInput").value = rows;
+            renderSrcList();
+            renderCutsList();
+            renderStage();
+        };
+        box.appendChild(el);
+    });
+}
+
+function renderBlockList() {
+    var box = $("blockList");
+    box.innerHTML = "";
+    $("blockCount").textContent = String(state.blocks.length);
+    $("blockBadge").textContent = state.blocks.length + " 块";
+    var filterSrc = state.selectedSourceId;
+    var list = state.blocks.filter(function (b) { return !filterSrc || b.sourceId === filterSrc; });
+    if (list.length === 0) {
+        box.innerHTML = '<div class="hint" style="padding:8px 10px">没有矩阵块。先导入图片并设置分割线。</div>';
+        return;
+    }
+    list.forEach(function (b) {
+        var el = document.createElement("div");
+        el.className = "item" + (b.id === state.selectedBlockId ? " sel" : "") + (b.include === false ? " off" : "");
+        el.setAttribute("data-testid", "left.block.item");
+        var off = offsetOf(b.id);
+        var bb = b.bbox ? (b.bbox.w + "×" + b.bbox.h) : (b.empty ? "全透明" : "未识别");
+        el.innerHTML =
+            '<img class="thumb" alt="" src="' + makeThumb(b) + '" />' +
+            '<div class="meta"><div class="name">' + blockLabel(b) + "</div>" +
+            '<div class="sub">' + b.sw + "×" + b.sh + " · 内容 " + bb + "</div>" +
+            '<div class="sub">偏移 ' + off.x + ", " + off.y +
+            (b.mode === "manual" ? ' <span class="tag">手动</span>' : "") +
+            (b.overlay ? ' <span class="tag">预览</span>' : "") + "</div></div>";
+        el.onclick = function () {
+            state.selectedBlockId = b.id;
+            state.selectedSourceId = b.sourceId;
+            renderBlockList();
+            renderSrcList();
+            syncInspector();
+            syncPreviewChips();
+            renderStage();
+            renderPreview();
+        };
+        box.appendChild(el);
+    });
+}
+
+/** 让块列表滚动到选中项（切分/对齐后方便看当前块） */
+function renderLists() {
+    renderSrcList();
+    renderBlockList();
+    renderCutsList();
+}
+
+function renderCutsList() {
+    var box = $("cutList");
+    box.innerHTML = "";
+    var s = sourceById(state.selectedSourceId);
+    $("gridTarget").textContent = s
+        ? "当前：S" + (state.sources.indexOf(s) + 1) + " · " + s.name + "（" + s.width + "×" + s.height + "）"
+        : "未选择图片源";
+    if (!s) return;
+    $("cutCount").textContent = "X " + s.cutsX.length + " / Y " + s.cutsY.length;
+    if (s.cutsX.length + s.cutsY.length === 0) {
+        box.innerHTML = '<div class="hint">还没有分割线。用「等分」或「格子尺寸」快速切分，也可以在画布上双击添加。</div>';
+        return;
+    }
+    var build = function (axis, arr, size) {
+        arr.forEach(function (val, i) {
+            var row = document.createElement("div");
+            row.className = "cutrow";
+            var num = document.createElement("span");
+            num.className = "idx";
+            num.textContent = (axis === "x" ? "X" : "Y") + (i + 1);
+            var inp = document.createElement("input");
+            inp.type = "number";
+            inp.min = "1";
+            inp.max = String(size - 1);
+            inp.value = String(val);
+            inp.setAttribute("data-testid", "grid.cut-value");
+            inp.onchange = function () {
+                pushUndo("修改分割线坐标");
+                var v = clamp(rint(parseFloat(inp.value)), 1, size - 1);
+                var next = arr.slice();
+                next[i] = v;
+                var cleaned = sanitizeCuts(next, size);
+                if (axis === "x") s.cutsX = cleaned;
+                else s.cutsY = cleaned;
+                rebuildBlocksFromCuts(true);
+                detectAll("missing");
+                renderCutsList();
+                renderStage();
+            };
+            var del = document.createElement("button");
+            del.textContent = "×";
+            del.title = "删除这条分割线";
+            del.setAttribute("data-testid", "grid.cut-delete");
+            del.onclick = function () {
+                pushUndo("删除分割线");
+                var next = arr.slice();
+                next.splice(i, 1);
+                if (axis === "x") s.cutsX = next;
+                else s.cutsY = next;
+                rebuildBlocksFromCuts(true);
+                detectAll("missing");
+                renderCutsList();
+                renderStage();
+            };
+            row.appendChild(num);
+            row.appendChild(inp);
+            row.appendChild(del);
+            box.appendChild(row);
+        });
+    };
+    build("x", s.cutsX, s.width);
+    build("y", s.cutsY, s.height);
+}
+
+function syncPreviewChips() {
+    var box = $("previewChips");
+    box.innerHTML = "";
+    var frames = exportableBlocks();
+    if (frames.length === 0) {
+        box.innerHTML = '<span class="hint">没有参与的帧</span>';
+        return;
+    }
+    frames.forEach(function (b, i) {
+        var chip = document.createElement("label");
+        chip.className = "chip" + (b.overlay ? " on" : "") + (b.id === state.selectedBlockId ? " cur" : "");
+        chip.setAttribute("data-testid", "preview.chip");
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !!b.overlay;
+        cb.onchange = function () {
+            b.overlay = cb.checked;
+            chip.className = "chip" + (b.overlay ? " on" : "") + (b.id === state.selectedBlockId ? " cur" : "");
+            renderPreview();
+        };
+        chip.appendChild(cb);
+        chip.appendChild(document.createTextNode(String(i + 1)));
+        chip.title = blockLabel(b) + "（右键设为选中块）";
+        chip.oncontextmenu = function (ev) {
+            ev.preventDefault();
+            state.selectedBlockId = b.id;
+            renderBlockList();
+            syncInspector();
+            syncPreviewChips();
+            renderPreview();
+        };
+        box.appendChild(chip);
+    });
+}
+
+/* ---------- 侧栏同步 ---------- */
+
+function syncInspector() {
+    var b = blockById(state.selectedBlockId);
+    $("selInfo").textContent = b
+        ? blockLabel(b) + " · " + sourceLabel(b.sourceId) + " · 块 " + b.sw + "×" + b.sh +
+          " · 偏移模式 " + (b.mode === "manual" ? "手动" : "自动")
+        : "未选中（点左侧列表或画布上的块）";
+    ["bboxX", "bboxY", "bboxW", "bboxH", "offX", "offY"].forEach(function (id) {
+        $(id).disabled = !b;
+    });
+    $("blockOpacity").disabled = !b;
+    if (!b) {
+        ["bboxX", "bboxY", "bboxW", "bboxH", "offX", "offY"].forEach(function (id) { $(id).value = ""; });
+    } else {
+        if (b.bbox) {
+            $("bboxX").value = b.bbox.x;
+            $("bboxY").value = b.bbox.y;
+            $("bboxW").value = b.bbox.w;
+            $("bboxH").value = b.bbox.h;
+        } else {
+            $("bboxX").value = "";
+            $("bboxY").value = "";
+            $("bboxW").value = "";
+            $("bboxH").value = "";
+        }
+        var off = offsetOf(b.id);
+        $("offX").value = off.x;
+        $("offY").value = off.y;
+        var op = Math.round((b.opacity == null ? 1 : b.opacity) * 100);
+        $("blockOpacity").value = String(op);
+        $("blockOpacityVal").textContent = op + "%";
+        $("includeToggle").textContent = b.include === false ? "不参与导出" : "参与导出";
+        $("includeToggle").className = b.include === false ? "" : "primary";
+    }
+    syncAnchorControls();
+    syncBaselineSelect();
+    syncManualSelects();
+    syncExportInfo();
+}
+
+function syncAnchorControls() {
+    var sel = $("anchorPreset");
+    if (sel.options.length === 0) {
+        ANCHOR_PRESETS.forEach(function (p) {
+            var o = document.createElement("option");
+            o.value = p.id;
+            o.textContent = p.label;
+            sel.appendChild(o);
+        });
+    }
+    sel.value = state.anchor.preset;
+    $("anchorOx").value = state.anchor.ox;
+    $("anchorOy").value = state.anchor.oy;
+    $("threshold").value = String(state.threshold);
+    $("thresholdVal").textContent = String(state.threshold);
+    syncPivotModeControls();
+}
+
+/**
+ * 「落点」与「基准块」是互斥的：只有落点选了「基准块的锚点位置」时，
+ * 基准块才参与运算。其余模式下把基准块相关控件置灰并说明原因，
+ * 免得用户改了基准块却发现结果没变。
+ */
+function syncPivotModeControls() {
+    var mode = state.exp.pivotMode;
+    var usesBaseline = mode === "baseline";
+
+    var row = $("baselineRow");
+    row.style.opacity = usesBaseline ? "1" : "0.45";
+    $("baselineSel").disabled = !usesBaseline;
+    $("autoBaseline").disabled = !usesBaseline;
+    $("autoBaseline").title = usesBaseline
+        ? "挑一个位置最居中的块作为基准"
+        : "当前落点不使用基准块";
+
+    $("pivotCellRow").style.display = mode === "cell" ? "" : "none";
+    $("pivotCellX").value = state.exp.pivotX;
+    $("pivotCellY").value = state.exp.pivotY;
+
+    var L = state.layout;
+    var t = L && L.target;
+    var targetText = t ? "(" + rint(t.x) + ", " + rint(t.y) + ")" : "—";
+    // 画布上落点标记的颜色与模式绑定，图例文字用同样的颜色，方便对号入座
+    var color = mode === "baseline" ? "#6ee7ff" : (mode === "median" ? "#a78bfa" : "#f472b6");
+    var swatch = '<b style="color:' + color + '">◎ 落点</b>';
+
+    // 把「格子中心」一并报出来：落点未必等于格子中心（中位数模式就不是），
+    // 不写出来用户会以为"对齐"理应是"居中"。
+    var cellW = 0;
+    var cellH = 0;
+    var eb = exportableBlocks();
+    if (eb.length > 0) { cellW = eb[0].sw; cellH = eb[0].sh; }
+    var ccx = rint(cellW / 2);
+    var ccy = rint(cellH / 2);
+    var isCenter = t && Math.abs(rint(t.x) - ccx) <= 0 && Math.abs(rint(t.y) - ccy) <= 0;
+    var centerNote = (cellW > 0 && !isCenter)
+        ? '<br />注意：格子中心是 <b>(' + ccx + ', ' + ccy + ')</b> —— 和这个落点并不重合，' +
+          '所以对齐后内容框<b>不会</b>正好落在格子正中。想让它在正中，改用「格子内指定位置」并点「图案居中到格子」。'
+        : '<br />这个落点正好就是格子中心 (' + ccx + ', ' + ccy + ')，所以每帧内容都落在自己格子正中。';
+
+    if (usesBaseline) {
+        $("pivotHint").innerHTML = "锚点最终落在格子内的 <b>" + targetText +
+            "</b>（= 基准块自己的锚点位置），基准帧不动，其余帧向它靠拢。" +
+            centerNote +
+            "<br />画布上 " + swatch + " 的环心就是锚点该去的位置；橙色锚点落进环心 = 这一帧已对齐。";
+    } else if (mode === "median") {
+        $("pivotHint").innerHTML = "锚点最终落在格子内的 <b>" + targetText +
+            "</b>（= 各帧锚点位置的中位数），所有帧都朝这个中间位置靠，位移最均衡。" +
+            centerNote +
+            "<br />画布上 " + swatch + " 的环心就是锚点该去的位置；橙色锚点落进环心 = 这一帧已对齐。";
+    } else {
+        $("pivotHint").innerHTML = "锚点最终落在格子内的 <b>" + targetText +
+            "</b>（手工指定），所有帧都朝这个位置对齐。" +
+            centerNote +
+            "<br />画布上 " + swatch + " 的环心就是锚点该去的位置；橙色锚点落进环心 = 这一帧已对齐。";
+    }
+}
+
+function syncBaselineSelect() {
+    var sel = $("baselineSel");
+    var prev = state.baselineId;
+    sel.innerHTML = "";
+    exportableBlocks().forEach(function (b) {
+        var o = document.createElement("option");
+        o.value = b.id;
+        o.textContent = blockLabel(b) + "（内容 " + b.bbox.w + "×" + b.bbox.h + "）";
+        sel.appendChild(o);
+    });
+    if (prev && blockById(prev)) sel.value = prev;
+    else if (sel.options.length > 0) {
+        state.baselineId = sel.options[0].value;
+        sel.value = state.baselineId;
+    }
+    // 切换落点模式后控件可用性会变，这里统一刷新
+    $("pivotMode").value = state.exp.pivotMode;
+}
+
+function syncManualSelects() {
+    var opts = exportableBlocks();
+    var build = function (sel, current) {
+        sel.innerHTML = "";
+        opts.forEach(function (b) {
+            var o = document.createElement("option");
+            o.value = b.id;
+            var off = offsetOf(b.id);
+            o.textContent = blockLabel(b) + " 偏移 " + off.x + "," + off.y;
+            sel.appendChild(o);
+        });
+        if (current && blockById(current)) sel.value = current;
+    };
+    build($("manualMove"), blockById(state.manual.moveId) ? state.manual.moveId : state.selectedBlockId);
+    build($("manualRef"), blockById(state.manual.refId) ? state.manual.refId : state.baselineId);
+    state.manual.moveId = $("manualMove").value || null;
+    state.manual.refId = $("manualRef").value || null;
+    $("manualMove").disabled = !state.manual.on;
+    $("manualRef").disabled = !state.manual.on;
+}
+
+function syncExportInfo() {
+    var L = state.layout;
+    if (!L || L.frames.length === 0) {
+        $("pivotInfo").textContent = "—";
+        $("clipWarn").textContent = "";
+        return;
+    }
+    var scale = parseInt($("scaleSel").value, 10) || 1;
+    $("pivotInfo").innerHTML =
+        "帧尺寸 <b>" + L.width + "×" + L.height + "</b> · 共 <b>" + L.frames.length + "</b> 帧<br />" +
+        "轴心 pivot = <b>(" + L.pivot.x + ", " + L.pivot.y + ")</b>" +
+        (scale > 1 ? " · 放大 " + scale + "× → " + (L.width * scale) + "×" + (L.height * scale) : "");
+
+    var clip = L.clip || [];
+    var msgs = [];
+    if (clip.length > 0) {
+        var worst = 0;
+        clip.forEach(function (c) { worst = Math.max(worst, c.over); });
+        msgs.push('<span style="color:#e8b23a">⚠ ' + clip.length + " 帧的内容移出了原格子，最多被裁掉 " +
+            worst + "px（" + clip.slice(0, 4).map(function (c) {
+                return blockLabel(blockById(c.id));
+            }).join("、") + (clip.length > 4 ? " 等" : "") +
+            "）。可以减小对齐位移，或改用「裁到内容」。</span>");
+    }
+    var spread = L.spread;
+    if (spread && spread.max > 0) {
+        var manualCount = spread.frames.filter(function (f) { return f.mode === "manual"; }).length;
+        msgs.push('<span style="color:#e8b23a">⚠ 有 ' + spread.frames.length + " 帧的锚点偏离 pivot，最大 " +
+            spread.max + "px" + (manualCount === spread.frames.length ? "（都是手动偏移的块，属预期）" : "") +
+            "。</span>");
+    }
+    $("clipWarn").innerHTML = msgs.join("<br />");
+}
+
+/* ---------- 刷新 ---------- */
+
+function refreshAll() {
+    recomputeOffsets();
+    renderLists();
+    syncInspector();
+    syncPreviewChips();
+    syncCellSizeWarn();
+    renderStage();
+    renderPreview();
+    syncHistoryButtons();
+    if (state.pendingFit) {
+        state.pendingFit = false;
+        fitStage();
+        fitPreview();
+    }
+}
+
+/* ---------- 导出 ---------- */
+
+function downloadBlob(blob, name) {
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function () {
+        URL.revokeObjectURL(a.href);
+        a.remove();
+    }, 5000);
+}
+
+function renderFrameCanvas(f, scale) {
+    var L = state.layout;
+    var cv = document.createElement("canvas");
+    cv.width = Math.max(1, L.width * scale);
+    cv.height = Math.max(1, L.height * scale);
+    var ctx = cv.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+    var b = blockById(f.id);
+    var src = sourceById(b.sourceId);
+    var dx = f.dx * scale;
+    var dy = f.dy * scale;
+
+    if (f.poly && f.poly.length >= 3) {
+        // 不规则切分：只保留多边形里的像素
+        ctx.save();
+        ctx.beginPath();
+        for (var i = 0; i < f.poly.length; i += 1) {
+            var px = dx + f.poly[i].x * scale;
+            var py = dy + f.poly[i].y * scale;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.clip();
+        ctx.drawImage(src.img, f.sx, f.sy, f.sw, f.sh, dx, dy, f.sw * scale, f.sh * scale);
+        ctx.restore();
+        return cv;
+    }
+
+    ctx.drawImage(src.img, f.sx, f.sy, f.sw, f.sh, dx, dy, f.sw * scale, f.sh * scale);
+    return cv;
+}
+
+function canvasToPngBytes(cv) {
+    return new Promise(function (resolve, reject) {
+        cv.toBlob(function (blob) {
+            if (!blob) { reject(new Error("toBlob 失败")); return; }
+            var fr = new FileReader();
+            fr.onload = function () { resolve(new Uint8Array(fr.result)); };
+            fr.onerror = function () { reject(new Error("读取 PNG 失败")); };
+            fr.readAsArrayBuffer(blob);
+        }, "image/png");
+    });
+}
+
+function pad4(n) {
+    var s = String(n);
+    while (s.length < 4) s = "0" + s;
+    return s;
+}
+
+function exportFramesZip() {
+    var L = state.layout;
+    if (!L || L.frames.length === 0) { setStatus("没有可导出的帧"); return; }
+    var scale = parseInt($("scaleSel").value, 10) || 1;
+    var base = window.prompt("导出文件名前缀", "frame");
+    if (base === null) return;
+    base = String(base || "frame").replace(/[\\/:*?"<>|]/g, "_");
+    var files = [];
+    var i = 0;
+    $("progWrap").style.display = "";
+    setStatus("正在生成序列帧…");
+
+    function step() {
+        if (i >= L.frames.length) {
+            var zip = zipStore(files);
+            downloadBlob(new Blob([zip], { type: "application/zip" }), base + "_frames.zip");
+            downloadBlob(new Blob([JSON.stringify(buildExportJson(), null, 2)], { type: "application/json" }), base + "_frames.json");
+            $("progWrap").style.display = "none";
+            $("progBar").style.width = "100%";
+            setStatus("已导出 " + L.frames.length + " 帧 → " + base + "_frames.zip（含同名 JSON 参数）");
+            return;
+        }
+        var f = L.frames[i];
+        canvasToPngBytes(renderFrameCanvas(f, scale)).then(function (bytes) {
+            files.push({ name: base + "_" + pad4(i) + ".png", data: bytes });
+            i += 1;
+            $("progBar").style.width = Math.round(i / L.frames.length * 100) + "%";
+            setStatus("正在生成序列帧… " + i + "/" + L.frames.length);
+            setTimeout(step, 0);
+        }).catch(function (err) {
+            $("progWrap").style.display = "none";
+            setStatus("导出失败：" + err.message);
+        });
+    }
+    step();
+}
+
+function buildExportJson() {
+    var L = state.layout;
+    var scale = parseInt($("scaleSel").value, 10) || 1;
+    var cols = clamp(parseInt($("sheetCols").value, 10) || 8, 1, 64);
+    var rows = Math.max(1, Math.ceil(L.frames.length / cols));
+    return {
+        version: 1,
+        generator: "Sprite Align (ImageOverlayTool tools/sprite-align)",
+        frameMode: L.mode,
+        frameModeHint: L.mode === "cell"
+            ? "帧画布 = 原格子尺寸，网格图导出后与原图分辨率一致"
+            : "帧画布 = 内容包围盒并集（最紧凑）",
+        frameWidth: L.width,
+        frameHeight: L.height,
+        scale: scale,
+        exportWidth: L.width * scale,
+        exportHeight: L.height * scale,
+        pivot: { x: L.pivot.x * scale, y: L.pivot.y * scale },
+        pivotUnit: "px，相对每帧左上角；把这个点作为桌宠的落地点/原点",
+        fps: clamp(parseInt($("fpsInput").value, 10) || 12, 1, 60),
+        anchor: {
+            preset: state.anchor.preset,
+            ax: state.anchor.ax,
+            ay: state.anchor.ay,
+            offsetX: state.anchor.ox,
+            offsetY: state.anchor.oy
+        },
+        baseline: state.exp.pivotMode === "baseline" ? state.baselineId : null,
+        pivotMode: state.exp.pivotMode,
+        pivotTarget: L.target ? { x: rint(L.target.x), y: rint(L.target.y) } : null,
+        pivotTargetHint: "锚点在格子内要落到的位置；baseline 模式 = 基准块自己的锚点位置",
+        pivotXY: state.exp.pivotMode === "cell" ? { x: state.exp.pivotX, y: state.exp.pivotY } : null,
+        pivotSpread: (L.spread && L.spread.max > 0)
+            ? { maxPx: L.spread.max, frames: L.spread.frames }
+            : null,
+        clipped: (L.clip || []).map(function (c) {
+            return { frame: c.id, over: c.over };
+        }),
+        frames: L.frames.map(function (f, i) {
+            var b = blockById(f.id);
+            var s = sourceById(b.sourceId);
+            return {
+                index: i,
+                file: "frame_" + pad4(i) + ".png",
+                source: { name: s ? s.name : "", row: b.row, col: b.col },
+                blockRect: { x: b.sx, y: b.sy, w: b.sw, h: b.sh },
+                contentRect: { x: b.bbox.x, y: b.bbox.y, w: b.bbox.w, h: b.bbox.h },
+                offset: offsetOf(f.id),
+                dest: { x: f.dx * scale, y: f.dy * scale, w: f.sw * scale, h: f.sh * scale }
+            };
+        }),
+        sheet: { cols: cols, rows: rows, cellWidth: L.width * scale, cellHeight: L.height * scale }
+    };
+}
+
+/**
+ * 把一帧画到目标 ctx 的 (ox,oy) 处，带多边形遮罩。
+ *
+ * 网格图 / 对照图都必须走这里 —— 直接 drawImage 会忽略套索，
+ * 于是相邻帧的像素会互相"串"进对方格子里（用户实测到的问题）。
+ */
+function drawFrameInto(ctx, f, ox, oy, scale) {
+    var b = blockById(f.id);
+    var src = b ? sourceById(b.sourceId) : null;
+    if (!src) return;
+    var s = scale || 1;
+    ctx.save();
+    if (f.poly && f.poly.length >= 3) {
+        ctx.beginPath();
+        for (var i = 0; i < f.poly.length; i += 1) {
+            var px = ox + f.poly[i].x * s;
+            var py = oy + f.poly[i].y * s;
+            if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+        }
+        ctx.closePath();
+        ctx.clip();
+    }
+    ctx.drawImage(src.img, f.sx, f.sy, f.sw, f.sh, ox, oy, f.sw * s, f.sh * s);
+    ctx.restore();
+}
+
+function exportSheet() {
+    var L = state.layout;
+    if (!L || L.frames.length === 0) { setStatus("没有可导出的帧"); return; }
+    var scale = parseInt($("scaleSel").value, 10) || 1;
+    var cols = clamp(parseInt($("sheetCols").value, 10) || 8, 1, 64);
+    var rows = Math.max(1, Math.ceil(L.frames.length / cols));
+    var cv = document.createElement("canvas");
+    cv.width = cols * L.width * scale;
+    cv.height = rows * L.height * scale;
+    var ctx = cv.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+    L.frames.forEach(function (f, i) {
+        var c = i % cols;
+        var r = Math.floor(i / cols);
+        drawFrameInto(ctx, f,
+            (c * L.width + f.dx) * scale,
+            (r * L.height + f.dy) * scale,
+            scale);
+    });
+    cv.toBlob(function (blob) {
+        downloadBlob(blob, "sheet_" + cols + "x" + rows + ".png");
+        setStatus("已导出网格图 " + cols + "×" + rows + "（" + cv.width + "×" + cv.height + "）");
+    }, "image/png");
+}
+
+function exportJson() {
+    if (!state.layout || state.layout.frames.length === 0) { setStatus("没有可导出的帧"); return; }
+    downloadBlob(new Blob([JSON.stringify(buildExportJson(), null, 2)], { type: "application/json" }), "sprite-align.json");
+    setStatus("已导出参数 JSON");
+}
+
+function exportOverlay() {
+    var L = state.layout;
+    if (!L || L.frames.length === 0) { setStatus("没有可导出的帧"); return; }
+    var scale = parseInt($("scaleSel").value, 10) || 1;
+    var cv = document.createElement("canvas");
+    cv.width = L.width * scale;
+    cv.height = L.height * scale;
+    var ctx = cv.getContext("2d");
+    ctx.imageSmoothingEnabled = false;
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    // forceAll：不管当前预览勾了哪几帧，对照图都把所有帧叠上去
+    paintPreviewWorld(ctx, { scale: scale, opacity: state.preview.opacity, forceAll: true });
+    cv.toBlob(function (blob) {
+        downloadBlob(blob, "overlay.png");
+        setStatus("已导出对照图（" + cv.width + "×" + cv.height + "）");
+    }, "image/png");
+}
+
+/* ---------- 事件绑定 ---------- */
+
+function bindUI() {
+    $("openBtn").onclick = function () { $("fileInput").click(); };
+    $("fileInput").onchange = function (e) {
+        addFiles(e.target.files);
+        e.target.value = "";
+    };
+    $("clearBtn").onclick = function () {
+        if (state.sources.length === 0) return;
+        if (!window.confirm("清空所有图片与切分设置？")) return;
+        state.sources = [];
+        state.blocks = [];
+        state.selectedSourceId = null;
+        state.selectedBlockId = null;
+        state.baselineId = null;
+        state.undo = [];
+        state.offsets = new Map();
+        state.layout = null;
+        state.manual.moveId = null;
+        state.manual.refId = null;
+        refreshAll();
+        setStatus("已清空");
+    };
+
+    // 拖放导入
+    window.addEventListener("dragover", function (e) {
+        e.preventDefault();
+        document.body.classList.add("drop-active");
+    });
+    window.addEventListener("dragleave", function () {
+        document.body.classList.remove("drop-active");
+    });
+    window.addEventListener("drop", function (e) {
+        e.preventDefault();
+        document.body.classList.remove("drop-active");
+        if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files);
+    });
+
+    // 画布：拖动时把 mousemove 挂到 window，指针移出画布也能继续
+    var stage = $("stage");
+    stage.addEventListener("mousedown", onStageDown);
+    stage.addEventListener("wheel", onStageWheel, { passive: false });
+    stage.addEventListener("dblclick", onStageDblClick);
+    stage.addEventListener("contextmenu", function (e) {
+        e.preventDefault();
+        var cut = hitCut(stagePos(e));
+        if (!cut) return;
+        var s = sourceById(cut.sourceId);
+        if (!s) return;
+        pushUndo("删除分割线");
+        if (cut.axis === "x") s.cutsX.splice(cut.index, 1);
+        else s.cutsY.splice(cut.index, 1);
+        rebuildBlocksFromCuts(true);
+        detectAll("missing");
+        renderCutsList();
+        renderStage();
+        setStatus("已删除分割线");
+    });
+    window.addEventListener("mousemove", function (e) {
+        if (drag || e.target === stage) onStageMove(e);
+    });
+    window.addEventListener("mouseup", onStageUp);
+
+    $("zoomIn").onclick = function () {
+        state.viewTouched = true;
+        state.view.zoomAt(stageCss.w / 2, stageCss.h / 2, 1.2, 0.02, 32);
+        renderStage();
+    };
+    $("zoomOut").onclick = function () {
+        state.viewTouched = true;
+        state.view.zoomAt(stageCss.w / 2, stageCss.h / 2, 1 / 1.2, 0.02, 32);
+        renderStage();
+    };
+    $("zoom100").onclick = function () {
+        state.viewTouched = true;
+        var cw = state.view.toWorld(stageCss.w / 2, stageCss.h / 2);
+        state.view.scale = 1;
+        state.view.centerOn(cw.x, cw.y, stageCss.w, stageCss.h);
+        renderStage();
+    };
+    $("fitBtn").onclick = function () {
+        state.viewTouched = false;
+        fitStage();
+    };
+
+    ["showCuts", "showBBox", "showAnchor", "showPivot", "showIndex"].forEach(function (id) {
+        $(id).onchange = function () {
+            state.show[id.replace("show", "").toLowerCase()] = $(id).checked;
+            renderStage();
+        };
+    });
+
+    // 对齐视图：主画布直接显示「导出后会变成什么样」
+    $("showAligned").onchange = function () {
+        setAlignedView(this.checked);
+        renderStage();
+        setStatus(this.checked
+            ? "对齐视图：内容已按对齐结果在各自格子内平移（淡影是它原来的位置）"
+            : "已回到原图视图");
+    };
+    $("showSplit").onchange = function () {
+        setSplitView(this.checked);
+        state.viewTouched = false;
+        renderStage();
+        if (this.checked) fitStage();
+        setStatus(this.checked
+            ? "分屏对比：左边原图、右边对齐后，两半共用缩放与平移（可拖动中间分界线调整比例）"
+            : "已退出分屏对比");
+    };
+    $("undoBtn").onclick = undo;
+    $("redoBtn").onclick = redo;
+
+    // 预览
+    var pv = $("preview");
+    pv.addEventListener("mousedown", previewDown);
+    pv.addEventListener("wheel", previewWheel, { passive: false });
+    window.addEventListener("mousemove", function (e) {
+        if (state.manual.drag || state.previewPan) previewMove(e);
+    });
+    window.addEventListener("mouseup", previewUp);
+    $("fitPreview").onclick = fitPreview;
+    $("previewOpacity").oninput = function () {
+        state.preview.opacity = clamp(parseInt(this.value, 10), 5, 100) / 100;
+        renderPreview();
+    };
+    $("previewRefOnly").onchange = function () {
+        state.preview.refOnly = this.checked;
+        renderPreview();
+    };
+    $("playBtn").onclick = function () {
+        if (state.sim.playing) stopSim();
+        else startSim();
+    };
+    $("fpsInput").onchange = function () {
+        state.sim.fps = clamp(parseInt(this.value, 10) || 12, 1, 60);
+        if (state.sim.playing) { stopSim(); startSim(); }
+    };
+    $("chipsAll").onclick = function () {
+        exportableBlocks().forEach(function (b) { b.overlay = true; });
+        syncPreviewChips();
+        renderPreview();
+    };
+    $("chipsNone").onclick = function () {
+        exportableBlocks().forEach(function (b) { b.overlay = false; });
+        syncPreviewChips();
+        renderPreview();
+    };
+    $("chipsOdd").onclick = function () {
+        exportableBlocks().forEach(function (b, i) { b.overlay = i % 2 === 0; });
+        syncPreviewChips();
+        renderPreview();
+    };
+    $("chipsSel").onclick = function () {
+        exportableBlocks().forEach(function (b) { b.overlay = b.id === state.selectedBlockId; });
+        syncPreviewChips();
+        renderPreview();
+    };
+
+    // 图片源排列方向
+    syncArrangeControls();
+    $("arrangeSel").onchange = function () {
+        pushUndo("切换排列方式");
+        state.arrange = this.value;
+        syncArrangeControls();
+        state.pendingFit = true;
+        refreshAll();
+        setStatus({
+            v: "图片源改为纵向排列（只影响工作区显示，不影响导出）",
+            h: "图片源改为横向排列（只影响工作区显示，不影响导出）",
+            grid: "图片源改为网格排列（只影响工作区显示，不影响导出）"
+        }[state.arrange]);
+    };
+    $("arrangeCols").onchange = function () {
+        pushUndo("修改网格列数");
+        state.arrangeCols = clamp(parseInt(this.value, 10) || 0, 0, 32);
+        this.value = String(state.arrangeCols);
+        state.pendingFit = true;
+        refreshAll();
+        setStatus(state.arrangeCols > 0 ? "网格列数 = " + state.arrangeCols : "网格列数 = 自动");
+    };
+
+    // 网格切分
+    var gridReport = function (info) {
+        var how = [];
+        how.push(info.methodX === "gutter" ? "纵向按透明空档" : (info.methodX === "even" ? "纵向按等分推断" : "纵向没找到规律"));
+        how.push(info.methodY === "gutter" ? "横向按透明空档" : (info.methodY === "even" ? "横向按等分推断" : "横向没找到规律"));
+        var extra = "";
+        if (info.snapped === false && info.evenAlt) {
+            extra = " · 空档与等分对不齐，按空档切了；想按等分槽位切就用「等分」按钮";
+        }
+        return "自动识别：" + info.cols + " 列 × " + info.rows + " 行（" + how.join("，") + "）" + extra;
+    };
+    var runAutoGrid = function (src) {
+        if (!src) return null;
+        pushUndo("自动识别网格");
+        var info = autoDetectGrid(src);
+        rebuildBlocksFromCuts(true);
+        detectAll("missing");
+        renderCutsList();
+        renderStage();
+        return info;
+    };
+    $("autoGrid").onclick = function () {
+        var s = sourceById(state.selectedSourceId);
+        if (!s) { setStatus("先在左侧选中一个图片源"); return; }
+        var info = runAutoGrid(s);
+        setStatus(gridReport(info));
+    };
+    $("autoGridAll").onclick = function () {
+        if (state.sources.length === 0) { setStatus("还没有导入图片"); return; }
+        pushUndo("自动识别网格（全部）");
+        var parts = [];
+        state.sources.forEach(function (s) {
+            var info = autoDetectGrid(s);
+            parts.push("S" + (state.sources.indexOf(s) + 1) + " " + info.cols + "×" + info.rows);
+        });
+        rebuildBlocksFromCuts(true);
+        detectAll("missing");
+        renderCutsList();
+        renderStage();
+        setStatus("自动识别：" + parts.join("，"));
+    };
+    $("applyGrid").onclick = function () {
+        var s = sourceById(state.selectedSourceId);
+        if (!s) { setStatus("先在左侧选中一个图片源"); return; }
+        pushUndo("等分切分");
+        var cols = clamp(parseInt($("colsInput").value, 10) || 1, 1, 64);
+        var rows = clamp(parseInt($("rowsInput").value, 10) || 1, 1, 64);
+        s.kind = "sheet";
+        s.cutsX = evenCuts(s.width, cols);
+        s.cutsY = evenCuts(s.height, rows);
+        rebuildBlocksFromCuts(true);
+        detectAll("missing");
+        renderCutsList();
+        renderStage();
+        setStatus("已按 " + cols + "×" + rows + " 等分（格子 " +
+            (s.width / cols).toFixed(1) + "×" + (s.height / rows).toFixed(1) + "）");
+    };
+    /**
+     * 「归一化格子尺寸」：把所有块的格子统一成 max(宽) × max(高)。
+     *
+     * 只改 sw/sh，sx/sy/内容框一律不动 —— 源图里的图案像素一个都不移动，
+     * 变的只是「格子」这个边框。但这一步很关键：
+     *   · 各帧格子一致 → 内容框能自由挪动（不再被自己的小格子夹住）
+     *   · 工作区网格整齐 → 一眼能判断对齐情况
+     *   · 导出时每帧的源矩形一致 → 边缘处理统一，帧尺寸天然相同
+     */
+    $("normCells").onclick = function () {
+        var eb = exportableBlocks();
+        if (eb.length === 0) { setStatus("还没有可用的块"); return; }
+        if (cellsAreUniform(eb)) {
+            setStatus("各块格子尺寸已经一致（" + eb[0].sw + "×" + eb[0].sh + "），无需归一化");
+            return;
+        }
+        pushUndo("归一化格子尺寸");
+        var max = computeMaxCell(eb);
+        var before = {};
+        state.blocks.forEach(function (b) { before[b.id] = { sw: b.sw, sh: b.sh }; });
+
+        computeNormalizedCells(state.blocks).forEach(function (n) {
+            var b = blockById(n.id);
+            if (!b) return;
+            b.sw = n.sw;
+            b.sh = n.sh;
+            // 尺寸变了，缓存的缩略图/像素数据要作废（它们只用于显示，重算即可）
+            b._thumb = null;
+        });
+        recomputeOffsets();
+        refreshAll();
+        syncCellSizeWarn();
+
+        var changed = 0;
+        state.blocks.forEach(function (b) {
+            var bf = before[b.id];
+            if (bf && (bf.sw !== b.sw || bf.sh !== b.sh)) changed += 1;
+        });
+        setStatus("已归一化格子尺寸：" + changed + " 个块统一为 " + max.w + "×" + max.h +
+            "（内容框与图案均未移动；格子边框统一向右下扩展）");
+    };
+    /**
+     * 「重新等分并归位」：把手动切出来的不等宽格子重新变回等分格，
+     * 每帧的内容跟着搬到新格子里（通过 crop）。
+     *
+     * 帧尺寸优先用「原图等分尺寸」（源宽÷列数）；这比内容大时可以选「按最大内容尺寸」，
+     * 避免内容被帧边界裁掉。
+     */
+    $("reEven").onclick = function () {
+        var s = sourceById(state.selectedSourceId);
+        if (!s) { setStatus("先选中一个图片源"); return; }
+        var cols = state.blocks.filter(function (b) { return b.sourceId === s.id; }).length;
+        if (cols === 0) { setStatus("该图片源还没有块"); return; }
+
+        // 只处理该源的块：列数沿用它现有的块数（行数按 1 处理，单行帧条最常见）
+        var mine = state.blocks.filter(function (b) { return b.sourceId === s.id; });
+        var rows = 1;
+        var rowSet = {};
+        mine.forEach(function (b) { rowSet[b.row || 0] = true; });
+        rows = Math.max(1, Object.keys(rowSet).length);
+        var colsN = Math.round(mine.length / rows);
+
+        var modeSel = $("reEvenSize").value;
+        var opts = {};
+        if (modeSel === "content") {
+            // 帧画布要能完整装下「最大的一帧内容」——这样套索圈出来的图案不会被格子边界切掉。
+            // 用内容框（套索后会按遮罩重算）而不是格子尺寸。
+            var maxBb = { w: 1, h: 1 };
+            mine.forEach(function (b) {
+                if (!b.bbox) return;
+                if (b.bbox.w > maxBb.w) maxBb.w = b.bbox.w;
+                if (b.bbox.h > maxBb.h) maxBb.h = b.bbox.h;
+            });
+            opts.cellW = maxBb.w;
+            opts.cellH = maxBb.h;
+        }
+
+        pushUndo("重新等分并归位");
+        // crop 必须一起传进去：套索之后内容就在 crop 里，
+        // 漏传会让 computeReEvenPlan 退回用「旧格子」推导 crop，套索圈的范围就丢了。
+        var plan = computeReEvenPlan(mine.map(function (b) {
+            return {
+                id: b.id, row: b.row, col: b.col,
+                sx: b.sx, sy: b.sy, sw: b.sw, sh: b.sh,
+                crop: b.crop || null,
+                bbox: b.bbox, include: b.include
+            };
+        }), s.width, s.height, colsN, rows, opts);
+
+        var cropped = 0;
+        plan.blocks.forEach(function (p) {
+            var b = blockById(p.id);
+            if (!b) return;
+            b.sx = p.sx; b.sy = p.sy; b.sw = p.sw; b.sh = p.sh;
+            b.crop = p.crop;
+            if (p.bbox) b.bbox = p.bbox;
+            if (p.crop && (p.crop.w > p.sw || p.crop.h > p.sh)) cropped += 1;
+        });
+        // 等分后不再需要手动分割线（格子已按等分坐标重排）
+        s.kind = "sheet";
+        s.cutsX = [];
+        s.cutsY = [];
+        recomputeOffsets();
+        refreshAll();
+        setStatus("已重新等分：" + colsN + " 列 × " + rows + " 行，每格 " + plan.cellW + "×" + plan.cellH +
+            "；各帧内容已跟着搬到新格子（原位置记在 crop 里）" +
+            (cropped > 0 ? " · 有 " + cropped + " 帧内容比新格子大，导出时会被格子边界裁掉，" +
+                "建议把帧尺寸改成「按最大内容尺寸」" : ""));
+    };
+    $("reEvenSize").onchange = function () {
+        setStatus(this.value === "content"
+            ? "重新等分时按「最大内容尺寸」定帧大小（内容不会被裁）"
+            : "重新等分时按「原图等分尺寸」定帧大小（源宽÷列数）");
+    };
+    $("lassoBtn").onclick = startLasso;
+    $("lassoClear").onclick = function () {
+        var b = blockById(state.selectedBlockId);
+        if (!b) { setStatus("先选中一个块"); return; }
+        if (!b.poly) { setStatus(blockLabel(b) + " 没有设置遮罩"); return; }
+        pushUndo("清除多边形遮罩");
+        applyPolyToBlock(b, null);
+        setStatus(blockLabel(b) + " 的遮罩已清除，恢复整格识别");
+    };
+    $("applyCell").onclick = function () {
+        var s = sourceById(state.selectedSourceId);
+        if (!s) { setStatus("先在左侧选中一个图片源"); return; }
+        var cw = parseInt($("cellW").value, 10);
+        var ch = parseInt($("cellH").value, 10);
+        if (!(cw > 0) || !(ch > 0)) { setStatus("请填写格子宽高"); return; }
+        pushUndo("按格子尺寸切分");
+        s.kind = "sheet";
+        s.cutsX = fixedCuts(s.width, cw);
+        s.cutsY = fixedCuts(s.height, ch);
+        rebuildBlocksFromCuts(true);
+        detectAll("missing");
+        renderCutsList();
+        renderStage();
+        setStatus("已按格子 " + cw + "×" + ch + " 切分");
+    };
+    $("clearCuts").onclick = function () {
+        var s = sourceById(state.selectedSourceId);
+        if (!s) return;
+        pushUndo("清空分割线");
+        s.cutsX = [];
+        s.cutsY = [];
+        $("colsInput").value = 1;
+        $("rowsInput").value = 1;
+        rebuildBlocksFromCuts(true);
+        detectAll("missing");
+        renderCutsList();
+        renderStage();
+    };
+
+    // 锚点 / 识别
+    $("anchorPreset").onchange = function () {
+        var value = this.value;
+        var p = null;
+        for (var i = 0; i < ANCHOR_PRESETS.length; i += 1) {
+            if (ANCHOR_PRESETS[i].id === value) p = ANCHOR_PRESETS[i];
+        }
+        if (!p) return;
+        pushUndo("切换锚点");
+        state.anchor.preset = p.id;
+        state.anchor.ax = p.ax;
+        state.anchor.ay = p.ay;
+        refreshAll();
+        setStatus("锚点已切换为「" + p.label + "」，所有自动块按新锚点重算偏移");
+    };
+    $("anchorOx").onchange = function () {
+        pushUndo("锚点偏移 X");
+        state.anchor.ox = rint(parseFloat(this.value) || 0);
+        refreshAll();
+    };
+    $("anchorOy").onchange = function () {
+        pushUndo("锚点偏移 Y");
+        state.anchor.oy = rint(parseFloat(this.value) || 0);
+        refreshAll();
+    };
+    $("threshold").oninput = function () {
+        state.threshold = clamp(parseInt(this.value, 10) || 0, 0, 254);
+        $("thresholdVal").textContent = String(state.threshold);
+    };
+    $("threshold").onchange = function () {
+        pushUndo("调整 alpha 阈值");
+        detectAll("auto");
+    };
+    $("redetectAll").onclick = function () {
+        pushUndo("全部重检");
+        detectAll("all");
+    };
+
+    // 对齐
+    $("pivotMode").onchange = function () {
+        pushUndo("切换落点模式");
+        var v = this.value;
+        var prevMode = state.exp.pivotMode;
+        state.exp.pivotMode = (v === "median" || v === "cell" || v === "none") ? v : "baseline";
+        // 首次进入「格子内指定位置」时给个合理起点：格子中心。
+        // 不复用基准块 —— 这个模式的要点就是「不依赖基准块」，
+        // 拿基准块当默认值会让置灰的基准块看起来仍然在起作用。
+        if (state.exp.pivotMode === "cell" && prevMode !== "cell") {
+            state.exp.pivotX = rint(state.layout ? state.layout.cellWidth / 2 : 0);
+            state.exp.pivotY = rint(state.layout ? state.layout.cellHeight / 2 : 0);
+        }
+        recomputeOffsets();
+        refreshAll();
+        setStatus({
+            baseline: "落点 = 基准块的锚点位置：基准帧不动，其余帧向它靠拢",
+            median: "落点 = 全体中位数：所有帧的锚点都对齐到「各帧锚点位置的中位数」，位移最均衡（不使用基准块）。" +
+                "注意这是「位置居中」，不等于「格子居中」—— 想让内容落在格子正中请用「格子内指定位置」",
+            cell: "落点 = 格子内指定位置：所有帧的锚点都朝这个位置对齐（不使用基准块）。" +
+                "锚点选「内容框中心」并点「图案居中到格子」，每帧内容就正好落在自己格子正中",
+            none: "落点 = 不对齐：所有帧都留在原位置（偏移 0）。" +
+                "适合先手动切分 / 套索，确认每帧图案完整后再回来对齐"
+        }[state.exp.pivotMode]);
+    };
+    [["pivotCellX", "pivotX"], ["pivotCellY", "pivotY"]].forEach(function (pair) {
+        $(pair[0]).onchange = function () {
+            pushUndo("修改落点位置");
+            state.exp[pair[1]] = rint(parseFloat(this.value) || 0);
+            recomputeOffsets();
+            refreshAll();
+        };
+    });
+    $("pivotCellCenter").onclick = function () {
+        var axis = $("centerAxis").value;
+        var axisName = axis === "x" ? "仅水平居中" : (axis === "y" ? "仅垂直居中" : "水平+垂直居中");
+        pushUndo("居中（" + axisName + "）");
+        var before = new Map();
+        state.blocks.forEach(function (b) { before.set(b.id, offsetOf(b.id)); });
+
+        // 先切到「格子内指定位置」模式，否则用户点了按钮却看不到效果
+        state.exp.pivotMode = "cell";
+        $("pivotMode").value = "cell";
+
+        var cw = state.layout.cellWidth;
+        var ch = state.layout.cellHeight;
+        // 只居中的一个轴：落点沿用「当前各帧锚点的中位数」，于是该轴上的相对关系不变。
+        // 对脚底锚点来说，这就是"脚还在同一条水平线上"，只是 X 方向对齐到格子中间。
+        var cur = computePivotTarget(alignItems(), state.anchor, state.baselineId, { mode: "median" });
+
+        state.exp.pivotX = (axis === "y") ? rint(cur.x) : rint(cw / 2);
+        state.exp.pivotY = (axis === "x") ? rint(cur.y) : rint(ch / 2);
+        recomputeOffsets();
+
+        // 报出"到底动了多少" —— 只差几个像素时肉眼看不出来，不报数用户会以为没生效
+        var maxShift = 0;
+        state.blocks.forEach(function (b) {
+            var a = before.get(b.id) || { x: 0, y: 0 };
+            var c = offsetOf(b.id);
+            maxShift = Math.max(maxShift, Math.abs(c.x - a.x), Math.abs(c.y - a.y));
+        });
+
+        // 「重新对齐」的结果主要通过「对齐后」视图体现，这里直接切过去，
+        // 否则点了按钮画布一动不动，用户会以为没生效。
+        setAlignedView(true);
+        refreshAll();
+        syncPivotModeControls();
+
+        var presetId = state.anchor.preset;
+        var presetName = "自定义锚点";
+        ANCHOR_PRESETS.forEach(function (p) { if (p.id === presetId) presetName = p.label; });
+        var isBoxCenter = presetId === "center";
+
+        var how;
+        if (axis === "x") {
+            how = "落点 X = 格子中心 " + state.exp.pivotX + "，Y 沿用各帧锚点中位数 " + state.exp.pivotY +
+                "（Y 方向不变 —— 用「" + presetName + "」时脚仍在同一条水平线上，只是水平方向居中了）";
+        } else if (axis === "y") {
+            how = "落点 Y = 格子中心 " + state.exp.pivotY + "，X 沿用各帧锚点中位数 " + state.exp.pivotX +
+                "（X 方向不变 —— 适合纵向排列的序列帧）";
+        } else {
+            how = "落点 = 格子中心 (" + state.exp.pivotX + ", " + state.exp.pivotY + ")，每帧的「" +
+                presetName + "」都对齐到这里" +
+                (isBoxCenter ? "，也就是内容框在各自格子内居中"
+                    : "（锚点不是内容框中心，所以内容框本身未必居中）");
+        }
+
+        setStatus("已切到「格子内指定位置」：" + how +
+            (maxShift > 0
+                ? "。本次各帧最多移动了 " + maxShift + " px"
+                : "。各帧位移都是 0 —— 本来就已经对齐到这个位置了") +
+            "。已切到「对齐后」视图，可直接看到结果");
+    };
+    $("centerAxis").onchange = function () {
+        var n = this.value === "x" ? "仅水平居中" : (this.value === "y" ? "仅垂直居中" : "水平+垂直居中");
+        setStatus("居中方式：" + n + " —— 点右边「居中」按钮生效");
+    };
+    $("baselineSel").onchange = function () {
+        pushUndo("切换基准块");
+        state.baselineId = this.value;
+        recomputeOffsets();
+        refreshAll();
+        setStatus("基准块已改为 " + blockLabel(blockById(state.baselineId)));
+    };
+    $("autoBaseline").onclick = function () {
+        var id = pickAutoBaseline(exportableBlocks());
+        if (!id) { setStatus("还没有可用的帧"); return; }
+        pushUndo("自动挑基准");
+        state.baselineId = id;
+        recomputeOffsets();
+        refreshAll();
+        setStatus("自动基准：" + blockLabel(blockById(id)));
+    };
+    $("realignAll").onclick = realignAll;
+
+    // 选中块
+    [["bboxX", "x"], ["bboxY", "y"], ["bboxW", "w"], ["bboxH", "h"]].forEach(function (pair) {
+        $(pair[0]).onchange = function () {
+            var b = blockById(state.selectedBlockId);
+            if (!b || !b.bbox) return;
+            var v = rint(parseFloat(this.value));
+            if (!Number.isFinite(v)) return;
+            pushUndo("修改内容框");
+            var nb = { x: b.bbox.x, y: b.bbox.y, w: b.bbox.w, h: b.bbox.h };
+            if (pair[1] === "x") nb.x = clamp(v, 0, b.sw - nb.w);
+            if (pair[1] === "y") nb.y = clamp(v, 0, b.sh - nb.h);
+            if (pair[1] === "w") nb.w = clamp(v, 1, b.sw - nb.x);
+            if (pair[1] === "h") nb.h = clamp(v, 1, b.sh - nb.y);
+            setBbox(b, nb);
+            refreshAll();
+        };
+    });
+    [["offX", "x"], ["offY", "y"]].forEach(function (pair) {
+        $(pair[0]).onchange = function () {
+            var b = blockById(state.selectedBlockId);
+            if (!b) return;
+            pushUndo("修改偏移");
+            // 自动块的 b.offset 是占位的 {0,0}，直接改会丢掉当前实际偏移，所以先回填
+            makeManualKeepOffset(b);
+            b.offset[pair[1]] = rint(parseFloat(this.value) || 0);
+            refreshAll();
+        };
+    });
+    $("blockOpacity").oninput = function () {
+        var b = blockById(state.selectedBlockId);
+        if (!b) return;
+        b.opacity = clamp(parseInt(this.value, 10), 5, 100) / 100;
+        $("blockOpacityVal").textContent = Math.round(b.opacity * 100) + "%";
+        renderPreview();
+    };
+    // 拖动滑块期间不记历史，松手（change）时记一次
+    $("blockOpacity").onchange = function () {
+        if (!blockById(state.selectedBlockId)) return;
+        pushUndo("修改块透明度");
+    };
+    $("blockAuto").onclick = function () {
+        var b = blockById(state.selectedBlockId);
+        if (!b) return;
+        pushUndo("偏移改为自动");
+        b.mode = "auto";
+        refreshAll();
+        setStatus(blockLabel(b) + " 的偏移改回自动（跟随锚点）");
+    };
+    $("blockManual").onclick = function () {
+        var b = blockById(state.selectedBlockId);
+        if (!b) return;
+        pushUndo("偏移改为手动");
+        makeManualKeepOffset(b);
+        refreshAll();
+        setStatus(blockLabel(b) + " 转为手动偏移（当前偏移 " + b.offset.x + ", " + b.offset.y + " 已保留），重新对齐时不会被改");
+    };
+    $("bboxAuto").onclick = function () {
+        var b = blockById(state.selectedBlockId);
+        if (!b) return;
+        pushUndo("内容框改为自动");
+        b.bboxMode = "auto";
+        detectBlock(b);
+        b.mode = "auto";
+        refreshAll();
+        setStatus(blockLabel(b) + " 的内容框改回自动识别");
+    };
+    $("redetectSel").onclick = function () {
+        var b = blockById(state.selectedBlockId);
+        if (!b) return;
+        pushUndo("重检内容框");
+        detectBlock(b);
+        recomputeOffsets();
+        refreshAll();
+        setStatus(blockLabel(b) + " 已重检");
+    };
+    $("includeToggle").onclick = function () {
+        var b = blockById(state.selectedBlockId);
+        if (!b) return;
+        pushUndo("切换是否参与导出");
+        b.include = b.include === false;
+        recomputeOffsets();
+        refreshAll();
+    };
+    /**
+     * 「本块居中到格子」：让**这一块的图案**在自己格子内居中。
+     *
+     * 关键认识：图案显示在工作区的位置 = 内容框 + 偏移。
+     * 所以"把图案挪到格子正中"要改的是**偏移**，不是内容框。
+     *
+     * 之前这个按钮改的是内容框位置，结果在自动偏移的块上是**完全无效**的：
+     * 锚点取内容框中心时 offset = 落点 − 内容框中心，于是
+     *   显示位置 = 内容框 + 偏移 = 落点 − 内容框尺寸/2
+     * 与内容框坐标无关 —— 框挪了，偏移同步抵消，图案纹丝不动。
+     * 这就是"框动了、图没动"的原因，不是渲染问题而是数学上必然。
+     *
+     * 现在改成：把该块切成手动偏移，并把偏移设成让内容框中心落在格子中心。
+     */
+    $("centerSel").onclick = function () {
+        var b = blockById(state.selectedBlockId);
+        if (!b || !b.bbox) { setStatus("先选中一个已识别出内容的块"); return; }
+        pushUndo("本块居中到格子");
+
+        var beforeOff = offsetOf(b.id);
+        // 手动偏移后，显示位置 = 内容框 + 偏移，要让内容框中心落在格子中心
+        var wantX = rint(b.sw / 2 - b.bbox.x - b.bbox.w / 2);
+        var wantY = rint(b.sh / 2 - b.bbox.y - b.bbox.h / 2);
+
+        b.mode = "manual";
+        b.offset = { x: wantX, y: wantY };
+        recomputeOffsets();
+
+        var got = offsetOf(b.id);
+        var cx = b.bbox.x + got.x + b.bbox.w / 2;
+        var cy = b.bbox.y + got.y + b.bbox.h / 2;
+        var moved = Math.abs(got.x - beforeOff.x) + Math.abs(got.y - beforeOff.y);
+
+        // 结果主要在「对齐后」视图里可见，顺手切过去
+        setAlignedView(true);
+        refreshAll();
+        setStatus(blockLabel(b) + " 已居中到格子：内容框中心落在 (" + rint(cx) + ", " + rint(cy) +
+            ")，格子中心 (" + rint(b.sw / 2) + ", " + rint(b.sh / 2) + ")" +
+            (moved > 0 ? "，偏移 " + (got.x - beforeOff.x >= 0 ? "+" : "") + (got.x - beforeOff.x) + ", " +
+                (got.y - beforeOff.y >= 0 ? "+" : "") + (got.y - beforeOff.y) : "，本来就已经居中") +
+            "。该块已转为手动偏移（重新对齐时不会被自动改动）");
+    };
+
+    // 手动对齐
+    $("manualOn").onchange = function () {
+        state.manual.on = this.checked;
+        if (state.manual.on) {
+            if (!state.manual.refId) state.manual.refId = state.baselineId;
+            if (!state.manual.moveId || state.manual.moveId === state.manual.refId) {
+                var other = exportableBlocks().filter(function (b) {
+                    return b.id !== state.manual.refId;
+                })[0];
+                state.manual.moveId = other ? other.id : state.manual.refId;
+            }
+            if (state.selectedBlockId !== state.manual.moveId) {
+                state.selectedBlockId = state.manual.moveId;
+                renderBlockList();
+                syncInspector();
+            }
+        }
+        syncManualSelects();
+        renderPreview();
+        setStatus(state.manual.on
+            ? "手动对齐已开启：在预览里拖动「拖动块」的内容，靠近边缘会自动吸附"
+            : "手动对齐已关闭");
+    };
+    $("manualMove").onchange = function () {
+        state.manual.moveId = this.value;
+        state.manual.snap = { x: false, y: false, point: false };
+        renderPreview();
+    };
+    $("manualRef").onchange = function () {
+        state.manual.refId = this.value;
+        state.manual.snap = { x: false, y: false, point: false };
+        renderPreview();
+    };
+
+    var snapCmd = function (edge) {
+        var mv = blockById(state.manual.moveId);
+        var rf = blockById(state.manual.refId);
+        if (!mv || !rf || !mv.bbox || !rf.bbox) { setStatus("请先选择拖动块与基准块"); return; }
+        if (mv.id === rf.id) { setStatus("拖动块与基准块不能是同一块"); return; }
+        pushUndo("手动对齐命令");
+        var L = state.layout;
+        var mOff = offsetOf(mv.id);
+        var rOff = offsetOf(rf.id);
+        var movRect = { x: mv.bbox.x + mOff.x - L.minX, y: mv.bbox.y + mOff.y - L.minY, w: mv.bbox.w, h: mv.bbox.h };
+        var refRect = { x: rf.bbox.x + rOff.x - L.minX, y: rf.bbox.y + rOff.y - L.minY, w: rf.bbox.w, h: rf.bbox.h };
+        var d = alignToTarget(edge, movRect, refRect);
+        mv.offset = { x: rint(mOff.x + d.dx), y: rint(mOff.y + d.dy) };
+        mv.mode = "manual";
+        mv.overlay = true;
+        recomputeOffsets();
+        refreshAll();
+        setStatus("已" + ({
+            left: "左对齐", right: "右对齐", centerX: "水平居中",
+            top: "顶部对齐", bottom: "底部对齐", centerY: "垂直居中"
+        }[edge] || "对齐") + "（该块转为手动偏移）");
+    };
+    $("snapLeft").onclick = function () { snapCmd("left"); };
+    $("snapRight").onclick = function () { snapCmd("right"); };
+    $("snapCenterX").onclick = function () { snapCmd("centerX"); };
+    $("snapTop").onclick = function () { snapCmd("top"); };
+    $("snapBottom").onclick = function () { snapCmd("bottom"); };
+    $("snapCenterY").onclick = function () { snapCmd("centerY"); };
+    $("snapBoth").onclick = function () {
+        var mv = blockById(state.manual.moveId);
+        var rf = blockById(state.manual.refId);
+        if (!mv || !rf || !mv.bbox || !rf.bbox) { setStatus("请先选择拖动块与基准块"); return; }
+        pushUndo("锚点完全重合");
+        var a1 = computeAnchorLocal(mv.bbox, anchorFor(mv));
+        var a2 = computeAnchorLocal(rf.bbox, anchorFor(rf));
+        var off1 = offsetOf(mv.id);
+        var off2 = offsetOf(rf.id);
+        mv.offset = {
+            x: rint(off1.x + (a2.x + off2.x) - (a1.x + off1.x)),
+            y: rint(off1.y + (a2.y + off2.y) - (a1.y + off1.y))
+        };
+        mv.mode = "manual";
+        mv.overlay = true;
+        recomputeOffsets();
+        refreshAll();
+        setStatus("锚点已与基准块完全重合（该块转为手动偏移）");
+    };
+
+    // 导出
+    $("frameMode").onchange = function () {
+        pushUndo("切换帧画布模式");
+        state.exp.frameMode = this.value === "tight" ? "tight" : "cell";
+        recomputeOffsets();
+        refreshAll();
+        fitPreview();
+        setStatus(state.exp.frameMode === "cell"
+            ? "帧画布 = 原格子尺寸，网格图导出后与原图分辨率一致"
+            : "帧画布 = 内容包围盒（最紧凑，分辨率会变小）");
+    };
+    $("padInput").onchange = function () {
+        pushUndo("修改留白");
+        state.exp.pad = clamp(parseInt(this.value, 10) || 0, 0, 256);
+        recomputeOffsets();
+        refreshAll();
+        fitPreview();
+    };
+    $("scaleSel").onchange = function () {
+        syncExportInfo();
+        renderPreview();
+    };
+    $("sheetCols").onchange = syncExportInfo;
+    $("exportFrames").onclick = exportFramesZip;
+    $("exportSheet").onclick = exportSheet;
+    $("exportJson").onclick = exportJson;
+    $("exportOverlay").onclick = exportOverlay;
+
+    // 键盘
+    window.addEventListener("keydown", function (e) {
+        var tag0 = (e.target && e.target.tagName) || "";
+        var inField = /^(INPUT|SELECT|TEXTAREA)$/.test(tag0);
+        // 空格必须吃掉默认行为：否则它会滚动页面，还会「点击」当前获得焦点的按钮
+        // （比如刚点过的「多边形套索」），把正在画的顶点清空。
+        if (e.code === "Space" && !inField) {
+            spaceDown = true;
+            e.preventDefault();
+            return;
+        }
+        if (e.code === "Space") spaceDown = true;
+        if (inField) return;
+        var mod = e.ctrlKey || e.metaKey;
+        // 套索进行中：Backspace / Ctrl+Z 都是「撤销上一个顶点」
+        if (lasso && (e.key === "Backspace" || (mod && e.key.toLowerCase() === "z" && !e.shiftKey))) {
+            e.preventDefault();
+            if (lasso.pts.length > 0) {
+                lasso.pts.pop();
+                setStatus("已撤销上一个顶点，还剩 " + lasso.pts.length + " 个（右键/Enter 结束，Esc 取消）");
+                renderStage();
+            } else {
+                setStatus("没有可撤销的顶点了，Esc 退出套索");
+            }
+            return;
+        }
+        if (mod && e.key.toLowerCase() === "z") {
+            e.preventDefault();
+            // 按住不放时 keydown 会重复触发，一次按键不该撤销好几步
+            if (e.repeat) return;
+            // Ctrl+Shift+Z 与 Ctrl+Y 都是重做
+            if (e.shiftKey) redo(); else undo();
+            return;
+        }
+        if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); if (!e.repeat) redo(); return; }
+        if (e.key === "Escape" && lasso) { e.preventDefault(); cancelLasso(); return; }
+        if (e.key === "Enter" && lasso) { e.preventDefault(); finishLasso(); return; }
+        if (e.key === "f" || e.key === "F") { fitStage(); return; }
+        if (e.key === "1") { state.view.scale = 1; renderStage(); return; }
+        var b = blockById(state.selectedBlockId);
+        if (!b || !b.bbox) return;
+        var step = e.shiftKey ? 10 : 1;
+        var nb = { x: b.bbox.x, y: b.bbox.y, w: b.bbox.w, h: b.bbox.h };
+        var moved = false;
+        if (e.key === "ArrowLeft") { nb.x = clamp(nb.x - step, 0, b.sw - nb.w); moved = true; }
+        if (e.key === "ArrowRight") { nb.x = clamp(nb.x + step, 0, b.sw - nb.w); moved = true; }
+        if (e.key === "ArrowUp") { nb.y = clamp(nb.y - step, 0, b.sh - nb.h); moved = true; }
+        if (e.key === "ArrowDown") { nb.y = clamp(nb.y + step, 0, b.sh - nb.h); moved = true; }
+        if (moved) {
+            e.preventDefault();
+            setBbox(b, nb);
+            renderStage();
+            renderBlockList();
+            syncInspector();
+            renderPreview();
+        }
+    });
+    window.addEventListener("keyup", function (e) {
+        if (e.code === "Space") spaceDown = false;
+    });
+
+    window.addEventListener("resize", function () {
+        // 窗口尺寸变了，画布尺寸也跟着变。如果用户还没手动缩放过/平移过，
+        // 就重新适应一次 —— 否则会保留旧的位移，看起来像图片被挤到角落或裁掉了。
+        var wasFitted = !state.viewTouched;
+        renderStage();
+        renderPreview();
+        if (wasFitted) {
+            fitStage();
+            fitPreview();
+        }
+    });
+}
+
+/* ---------- 启动 ---------- */
+
+bindUI();
+refreshAll();
+syncHistoryButtons();
+setStatus("就绪 · 拖入或打开图片（一张网格图会自动按 4×4 预切分，多张图每张算一帧）");
+</script>
+</body>
+</html>
