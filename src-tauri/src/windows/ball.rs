@@ -17,6 +17,7 @@
 #![cfg(windows)]
 
 use std::cell::RefCell;
+use std::sync::atomic::{AtomicIsize, Ordering};
 use std::sync::OnceLock;
 
 use tauri::AppHandle;
@@ -41,6 +42,41 @@ const BALL_SIZE: i32 = 64;
 const PEEK_VISIBLE: i32 = 14;
 const PADDING: f32 = 9.0;
 const TIMER_SLIDE: usize = 1;
+/// Delayed collapse: the pointer may briefly leave the window while it is
+/// sliding, or while crossing the transparent margin next to the screen edge.
+/// Collapsing only after the pointer stayed away for a moment is what stops the
+/// old expand/collapse feedback loop.
+const TIMER_COLLAPSE: usize = 2;
+const COLLAPSE_DELAY_MS: u32 = 220;
+const DRAG_THRESHOLD: i32 = 4;
+
+/// Private message used to drive the window from other threads (the tray, the
+/// panel or an IPC handler) without touching the window's thread-local state.
+const WM_BALL_CMD: u32 = 0x8000 + 1;
+const CMD_EXPAND: usize = 1;
+const CMD_COLLAPSE: usize = 2;
+const CMD_REPOSITION: usize = 3;
+const CMD_TOGGLE_VISIBLE: usize = 4;
+
+/// The ball window handle, for code running off the window thread.
+static BALL_HWND: AtomicIsize = AtomicIsize::new(0);
+
+fn ball_hwnd() -> Option<HWND> {
+    let raw = BALL_HWND.load(Ordering::SeqCst);
+    if raw == 0 {
+        None
+    } else {
+        Some(HWND(raw as *mut _))
+    }
+}
+
+fn run_ball_cmd(cmd: usize) {
+    if let Some(hwnd) = ball_hwnd() {
+        unsafe {
+            let _ = PostMessageW(Some(hwnd), WM_BALL_CMD, WPARAM(cmd), LPARAM(0));
+        }
+    }
+}
 
 /// `WM_MOUSELEAVE` is not re-exported by the windows crate, so define it here.
 /// (Using an unknown identifier directly in a `match` arm would silently become
@@ -111,6 +147,8 @@ pub fn init(handle: &AppHandle) -> Result<(), String> {
             None,
         )
         .map_err(|e| e.to_string())?;
+
+        BALL_HWND.store(hwnd.0 as isize, Ordering::SeqCst);
 
         let side_right = cfg.ball_side != "left";
         let y_frac = cfg.ball_y.clamp(0.0, 1.0);
@@ -282,10 +320,13 @@ struct Canvas {
 
 impl Canvas {
     fn new(w: i32, h: i32) -> Self {
+        // A 1/255 alpha keeps every pixel hit-testable: a layered window with
+        // zero-alpha pixels is click-through, and that is what used to make the
+        // hover state flip while the ball sat at the screen edge.
         Self {
             w,
             h,
-            px: vec![[0.0; 4]; (w * h) as usize],
+            px: vec![[0.0, 0.0, 0.0, 1.0 / 255.0]; (w * h) as usize],
         }
     }
 
@@ -565,6 +606,18 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             let (dx, dy) = BALL.with(|b| {
                 let mut g = b.borrow_mut();
                 let Some(ball) = g.as_mut() else { return (0, 0) };
+                // A press only turns into a drag once the pointer travelled past
+                // the threshold; below it the same press stays a click and must
+                // toggle the panel instead of nudging the ball.
+                if ball.pressed && !ball.dragging {
+                    let mut pt = POINT::default();
+                    let _ = GetCursorPos(&mut pt);
+                    if (pt.x - ball.drag_origin.x).abs() > DRAG_THRESHOLD
+                        || (pt.y - ball.drag_origin.y).abs() > DRAG_THRESHOLD
+                    {
+                        ball.dragging = true;
+                    }
+                }
                 if ball.dragging {
                     let mut pt = POINT::default();
                     let _ = GetCursorPos(&mut pt);
@@ -577,6 +630,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 (0, 0)
             });
             if start_hover {
+                // The pointer is back: cancel any pending delayed collapse.
+                let _ = KillTimer(Some(hwnd), TIMER_COLLAPSE);
                 let mut tme = TRACKMOUSEEVENT {
                     cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
                     dwFlags: TME_LEAVE,
@@ -614,23 +669,27 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         MSG_MOUSELEAVE => {
-            let mut collapse = false;
+            let mut schedule_collapse = false;
             BALL.with(|b| {
                 let mut g = b.borrow_mut();
                 if let Some(ball) = g.as_mut() {
                     ball.hovering = false;
-                    if !ball.dragging && !ball.pressed {
-                        collapse = ball.expanded;
-                    }
+                    schedule_collapse = ball.expanded && !ball.dragging && !ball.pressed;
                 }
             });
             render(hwnd, Face::Idle);
-            if collapse {
-                slide(hwnd, false);
+            if schedule_collapse {
+                // Do not snap back immediately: while the ball slides, or while
+                // the pointer crosses the transparent margin next to the screen
+                // edge, it can re-enter at once. Waiting here is what breaks the
+                // old expand/collapse feedback loop.
+                let _ = SetTimer(Some(hwnd), TIMER_COLLAPSE, COLLAPSE_DELAY_MS, None);
             }
             LRESULT(0)
         }
         WM_LBUTTONDOWN => {
+            // A press means the pointer is here: drop any pending delayed collapse.
+            let _ = KillTimer(Some(hwnd), TIMER_COLLAPSE);
             BALL.with(|b| {
                 let mut g = b.borrow_mut();
                 if let Some(ball) = g.as_mut() {
@@ -656,8 +715,9 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 if let Some(ball) = g.as_mut() {
                     let mut pt = POINT::default();
                     let _ = GetCursorPos(&mut pt);
-                    let moved = (pt.x - ball.drag_origin.x).abs() > 4
-                        || (pt.y - ball.drag_origin.y).abs() > 4;
+                    let moved = ball.dragging
+                        || (pt.x - ball.drag_origin.x).abs() > DRAG_THRESHOLD
+                        || (pt.y - ball.drag_origin.y).abs() > DRAG_THRESHOLD;
                     ball.pressed = false;
                     ball.dragging = false;
                     if moved {
@@ -688,9 +748,47 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_TIMER => {
-            if wparam.0 == TIMER_SLIDE {
-                tick_slide(hwnd);
+            match wparam.0 {
+                TIMER_SLIDE => tick_slide(hwnd),
+                TIMER_COLLAPSE => {
+                    let _ = KillTimer(Some(hwnd), TIMER_COLLAPSE);
+                    // The pointer may have come back while the timer was pending;
+                    // only collapse if it is still away.
+                    let collapse = BALL.with(|b| {
+                        let g = b.borrow();
+                        g.as_ref()
+                            .map(|ball| {
+                                ball.expanded && !ball.hovering && !ball.dragging && !ball.pressed
+                            })
+                            .unwrap_or(false)
+                    });
+                    if collapse {
+                        slide(hwnd, false);
+                    }
+                }
+                _ => {}
             }
+            LRESULT(0)
+        }
+        WM_BALL_CMD => {
+            // Commands posted from another thread (tray, panel, IPC). They must
+            // never touch the thread-local `BALL` state directly, so everything
+            // is re-dispatched here on the window's own thread.
+            let _ = KillTimer(Some(hwnd), TIMER_COLLAPSE);
+            match wparam.0 {
+                CMD_EXPAND => slide(hwnd, true),
+                CMD_COLLAPSE => slide(hwnd, false),
+                CMD_REPOSITION => reposition_now(hwnd),
+                CMD_TOGGLE_VISIBLE => toggle_visible_now(hwnd),
+                _ => {}
+            }
+            LRESULT(0)
+        }
+        WM_DESTROY => {
+            BALL_HWND.store(0, Ordering::SeqCst);
+            BALL.with(|b| {
+                *b.borrow_mut() = None;
+            });
             LRESULT(0)
         }
         WM_RBUTTONUP => {
@@ -736,22 +834,35 @@ fn show_menu(hwnd: HWND) {
 
 // ------------------------------------------------------------- public api
 
+/// Toggle the ball window's visibility. Safe to call from any thread: the
+/// command is posted to the ball window and applied on its own thread.
 pub fn toggle_visible(_app: &AppHandle) {
+    run_ball_cmd(CMD_TOGGLE_VISIBLE);
+}
+
+/// Re-read the persisted position and dock the ball again. Safe from any thread.
+pub fn reposition(_app: &AppHandle) {
+    run_ball_cmd(CMD_REPOSITION);
+}
+
+fn toggle_visible_now(hwnd: HWND) {
     BALL.with(|b| {
         let g = b.borrow();
-        let Some(ball) = g.as_ref() else { return };
+        if g.is_none() {
+            return;
+        }
         unsafe {
-            if IsWindowVisible(ball.hwnd).as_bool() {
-                let _ = ShowWindow(ball.hwnd, SW_HIDE);
+            if IsWindowVisible(hwnd).as_bool() {
+                let _ = ShowWindow(hwnd, SW_HIDE);
             } else {
-                let _ = ShowWindow(ball.hwnd, SW_SHOWNOACTIVATE);
-                render(ball.hwnd, Face::Idle);
+                let _ = ShowWindow(hwnd, SW_SHOWNOACTIVATE);
+                render(hwnd, Face::Idle);
             }
         }
     });
 }
 
-pub fn reposition(_app: &AppHandle) {
+fn reposition_now(hwnd: HWND) {
     let cfg = state::load_config();
     BALL.with(|b| {
         let mut g = b.borrow_mut();
@@ -759,8 +870,8 @@ pub fn reposition(_app: &AppHandle) {
         ball.side_right = cfg.ball_side != "left";
         ball.y_frac = cfg.ball_y;
         ball.expanded = false;
-        place(ball.hwnd, ball.side_right, ball.y_frac, false);
-        render(ball.hwnd, Face::Idle);
+        place(hwnd, ball.side_right, ball.y_frac, false);
+        render(hwnd, Face::Idle);
     });
 }
 
@@ -777,18 +888,14 @@ pub fn ball_rect() -> Option<(i32, i32, i32, i32, bool)> {
     })
 }
 
+/// Slide the ball out. Safe to call from any thread (posted to the ball window).
 pub fn expand() {
-    let hwnd = BALL.with(|b| b.borrow().as_ref().map(|x| x.hwnd));
-    if let Some(h) = hwnd {
-        slide(h, true);
-    }
+    run_ball_cmd(CMD_EXPAND);
 }
 
+/// Slide the ball back to its docked sliver. Safe from any thread.
 pub fn collapse() {
-    let hwnd = BALL.with(|b| b.borrow().as_ref().map(|x| x.hwnd));
-    if let Some(h) = hwnd {
-        slide(h, false);
-    }
+    run_ball_cmd(CMD_COLLAPSE);
 }
 
 /// DPI of the monitor the ball currently sits on.
