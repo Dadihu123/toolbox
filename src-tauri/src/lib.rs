@@ -11,10 +11,16 @@ pub mod state;
 pub mod windows;
 
 use std::sync::OnceLock;
+use std::time::Duration;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::AppHandle;
+use tauri::{AppHandle, Wry};
+
+/// How many times the tray icon registration is retried while the notification
+/// area may still be starting up.
+const TRAY_ATTEMPTS: usize = 6;
+const TRAY_RETRY_DELAY: Duration = Duration::from_millis(1_000);
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
@@ -120,13 +126,27 @@ pub fn run() {
 }
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
+    let menu = tray_menu(app)?;
+    build_tray_icon(app, menu, 1)
+}
+
+fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
     let panel = MenuItem::with_id(app, "panel", "打开工具面板", true, None::<&str>)?;
     let main = MenuItem::with_id(app, "main", "主界面…", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&panel, &main, &sep, &quit])?;
+    Menu::with_items(app, &[&panel, &main, &sep, &quit])
+}
 
-    let mut builder = TrayIconBuilder::with_id("toolbox-tray")
+/// Builds the tray icon and checks that the shell really accepted it.
+///
+/// `Shell_NotifyIcon(NIM_ADD)` fails with `ERROR_ACCESS_DENIED` while Explorer's
+/// notification area is still coming up (login autostart, shell restart), and the
+/// `tray-icon` crate swallows that error: [`TrayIconBuilder::build`] reports success
+/// and the icon is missing until the app restarts. Probing `TrayIcon::rect()` shows
+/// whether the icon is registered, so retry for a few seconds instead of giving up.
+fn build_tray_icon(app: &AppHandle, menu: Menu<Wry>, attempt: usize) -> tauri::Result<()> {
+    let mut builder = TrayIconBuilder::with_id(format!("toolbox-tray-{attempt}"))
         .tooltip("Toolbox")
         .menu(&menu)
         .show_menu_on_left_click(false)
@@ -147,11 +167,99 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
             }
         });
 
-    if let Some(icon) = app.default_window_icon().cloned() {
-        builder = builder.icon(icon);
+    let default_icon = app.default_window_icon().cloned();
+    let icon = default_icon.or_else(|| {
+        tauri::image::Image::from_bytes(include_bytes!("../icons/icon.png"))
+            .map_err(|e| logging::write("warn", "tray", &format!("png icon decode failed: {e}")))
+            .ok()
+    });
+    match icon {
+        Some(icon) => builder = builder.icon(icon),
+        None => logging::write("warn", "tray", "no icon available for the tray"),
     }
-    builder.build(app)?;
+
+    let tray = match builder.build(app) {
+        Ok(tray) => tray,
+        Err(e) => {
+            logging::write("error", "tray", &format!("tray build failed: {e}"));
+            schedule_tray_retry(app, attempt);
+            return Ok(());
+        }
+    };
+
+    // `rect()` asks the shell where the icon lives; `None` means the shell never
+    // registered it (`Shell_NotifyIconGetRect` failed). Always `Some` off Windows.
+    #[cfg(target_os = "windows")]
+    let registered = match tray.rect() {
+        Ok(Some(rect)) => {
+            logging::write(
+                "info",
+                "tray",
+                &format!("tray icon registered at {:?}", rect.position),
+            );
+            true
+        }
+        Ok(None) => false,
+        Err(e) => {
+            logging::write("warn", "tray", &format!("tray icon rect query failed: {e}"));
+            false
+        }
+    };
+    #[cfg(not(target_os = "windows"))]
+    let registered = true;
+
+    if registered {
+        if attempt > 1 {
+            logging::write(
+                "info",
+                "tray",
+                &format!("tray icon created on attempt {attempt}/{TRAY_ATTEMPTS}"),
+            );
+        }
+        return Ok(());
+    }
+
+    logging::write(
+        "warn",
+        "tray",
+        &format!(
+            "notification area did not accept the tray icon (attempt {attempt}/{TRAY_ATTEMPTS})"
+        ),
+    );
+    schedule_tray_retry(app, attempt);
     Ok(())
+}
+
+/// Retries tray creation on the main thread after a short delay; if the last
+/// attempt already failed, record that the icon will not be visible.
+fn schedule_tray_retry(app: &AppHandle, attempt: usize) {
+    if attempt >= TRAY_ATTEMPTS {
+        logging::write(
+            "error",
+            "tray",
+            "tray icon was never accepted by the notification area; it will not be visible",
+        );
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(TRAY_RETRY_DELAY);
+        let handle = app.clone();
+        let scheduled = app.run_on_main_thread(move || {
+            let result =
+                tray_menu(&handle).and_then(|menu| build_tray_icon(&handle, menu, attempt + 1));
+            if let Err(e) = result {
+                logging::write("error", "tray", &format!("tray retry failed: {e}"));
+            }
+        });
+        if let Err(e) = scheduled {
+            logging::write(
+                "error",
+                "tray",
+                &format!("could not schedule tray retry: {e}"),
+            );
+        }
+    });
 }
 
 fn handle_second_instance(app: &AppHandle, argv: Vec<String>) {
