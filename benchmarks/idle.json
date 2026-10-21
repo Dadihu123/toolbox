@@ -1,29 +1,53 @@
 {
-  "note": "Measured on Windows 11 26H2 (build 26300), 2560x1600 @150% scaling, release build 0.1.0. WebView2 processes are counted only when they are descendants of the host process; other applications on the machine have their own WebView2 instances and must not be included.",
+  "note": "Measured on Windows 11 26H2 (build 26300), 2560x1600 @150% scaling, release build 0.1.0 after the reviewed-install / runtime-action / panel-warm-keep work. WebView2 processes are counted only when they are descendants of the host process; other applications on the machine have their own WebView2 instances and must not be included. The panel warm-keep teardown was measured with a 6 s override (TOOLBOX_PANEL_WARM_SECS) to avoid a 5 minute wait; the shipped default is 300 s.",
   "measurements": [
     {
       "state": "idle (ball only, no window)",
-      "timestamp": "2026-10-21T15:29:13+08:00",
-      "hostRssMb": 11.8,
+      "timestamp": "2026-10-21T19:39:50+08:00",
+      "hostRssMb": 11.7,
       "hostPrivateMb": 2.2,
       "cpuPercent": 0,
       "threads": 5,
-      "handles": 144,
+      "handles": 152,
       "webviewProcs": 0,
       "webviewRssMb": 0,
-      "totalRssMb": 11.8
+      "totalRssMb": 11.7
     },
     {
       "state": "panel open",
-      "timestamp": "2026-10-21T15:30:15+08:00",
-      "hostRssMb": 26.5,
-      "hostPrivateMb": 7.2,
+      "timestamp": "2026-10-21T19:40:05+08:00",
+      "hostRssMb": 26.7,
+      "hostPrivateMb": 7.5,
       "cpuPercent": 0,
       "threads": 28,
-      "handles": 313,
+      "handles": 320,
       "webviewProcs": 6,
-      "webviewRssMb": 338.6,
-      "totalRssMb": 365.1
+      "webviewRssMb": 316.7,
+      "totalRssMb": 343.4
+    },
+    {
+      "state": "panel hidden, still warm (reopen is instant)",
+      "timestamp": "2026-10-21T19:40:18+08:00",
+      "hostRssMb": 26.7,
+      "hostPrivateMb": 7.6,
+      "cpuPercent": 0,
+      "threads": 29,
+      "handles": 321,
+      "webviewProcs": 6,
+      "webviewRssMb": 323.5,
+      "totalRssMb": 350.2
+    },
+    {
+      "state": "panel warm window destroyed (teardown after warm TTL)",
+      "timestamp": "2026-10-21T19:45:46+08:00",
+      "hostRssMb": 24.4,
+      "hostPrivateMb": 4.8,
+      "cpuPercent": 0,
+      "threads": 23,
+      "handles": 292,
+      "webviewProcs": 0,
+      "webviewRssMb": 0,
+      "totalRssMb": 24.4
     }
   ],
   "targets": {
@@ -32,8 +56,10 @@
     "startupToBallMs": 800
   },
   "observations": [
-    "The idle target (<=30 MB) is met with a wide margin: 11.8 MB with zero WebView2 processes, because the floating ball is a native layered window and no webview exists until a window is opened.",
-    "The first window costs ~340 MB of WebView2 processes. This is the fixed price of the Chromium engine (browser + GPU + renderer + utility processes) and is not reducible by application code.",
-    "Closing a window destroys its webview and releases those processes again (verified by re-running the idle measurement)."
+    "The idle target (<=30 MB) is met with a wide margin: 11.7 MB with zero WebView2 processes, because the floating ball is a native layered window and no webview exists until a window is opened.",
+    "The first window costs ~320 MB of WebView2 processes. This is the fixed price of the Chromium engine (browser + GPU + renderer + utility processes) and is not reducible by application code.",
+    "Closing a tool window destroys its webview and releases those processes again (verified by re-running the idle measurement).",
+    "The panel is deliberately kept warm for 5 minutes after hiding so reopening is instant; during that window it still owns its six WebView2 processes. The teardown timer then destroys the webview and the child processes disappear.",
+    "After the panel teardown the host working set stays above the pre-webview idle number (24.4 MB vs 11.7 MB) because WebView2 loader/DLL pages remain mapped in the process; private bytes stay low (4.8 MB vs 2.2 MB) and CPU is 0%, so nothing is spinning or leaking. A restart returns the process to the 11.7 MB baseline."
   ]
 }
