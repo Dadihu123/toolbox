@@ -71,11 +71,12 @@ pub fn builtin_actions(cfg: &Config) -> Vec<ActionDef> {
     ]
 }
 
-/// All actions declared by every discovered tool manifest.
+/// All actions declared by every *enabled* tool manifest.
 pub fn tool_actions(tools: &[registry::Manifest]) -> Vec<ActionDef> {
+    let states = state::load_tools();
     let mut out = Vec::new();
     for t in tools {
-        if !t.error.is_empty() {
+        if !t.error.is_empty() || !registry::is_enabled(&states, &t.id) {
             continue;
         }
         for a in &t.actions {

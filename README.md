@@ -4,14 +4,14 @@ Portable personal toolset host for Windows. A floating ball sits at the screen e
 hotkey opens a search panel; each tool runs in its own sandboxed webview.
 
 > Status: M1/M2 milestone. Ball, panel, main window, hotkey registry, tool sandbox and
-> bridge are implemented and verified end to end. Packaging (NSIS/portable zip) is not
-> done yet.
+> bridge are implemented and verified end to end. A portable zip is produced by
+> `scripts/make-portable.ps1`; an NSIS installer is not written yet.
 
 ## What works today
 
 - **Floating ball** — native Win32 layered window (not a webview), docked to the right
   edge, collapsed to a 14 px sliver, slides out on hover, drag to move, snaps back to
-  the nearest edge, right-click for a menu. **~16 MB RSS with no window open.**
+  the nearest edge, right-click for a menu.
 - **Panel** — `Ctrl+Shift+T`, search across tool names *and* tool actions, ↑↓/Enter/Esc,
   opens next to the ball.
 - **Main window** — `Ctrl+Shift+M`, tools / hotkeys / settings / about + official tool
@@ -22,6 +22,22 @@ hotkey opens a search panel; each tool runs in its own sandboxed webview.
 - **Hotkeys** — per-action, user rebindable, conflict detection, `requiresOpen` actions
   only register while their tool window exists.
 - **Portable data** — everything under `<exe>/data`, including the WebView2 profile.
+
+## Measured footprint
+
+Release build, Windows 11, no window open:
+
+| State | Host RSS | WebView2 processes | Total | CPU |
+| --- | --- | --- | --- | --- |
+| Idle (ball only) | **11.8 MB** | 0 | **11.8 MB** | 0% |
+| Panel open | 26.5 MB | 6 / 338.6 MB | 365.1 MB | 0% |
+
+The idle number is the one that matters: the ball is a native layered window, so an
+idle Toolbox is a single ~12 MB process with no Chromium at all. The first window pays
+the fixed WebView2 cost; closing it releases those processes again. Re-measure with
+`scripts/measure-idle.ps1`; history lives in `benchmarks/idle.json`.
+
+Release binary: **4.05 MB**, portable zip: **1.8 MB**.
 
 ## Layout
 
@@ -57,6 +73,7 @@ cd src-tauri
 cargo build            # debug build
 .\target\debug\toolbox.exe --main      # open the main window directly
 .\target\debug\toolbox.exe --tool sprite-align
+.\target\debug\toolbox.exe --panel     # open the search panel
 .\target\debug\toolbox.exe --quiet     # ball only, no panel
 ```
 
@@ -66,6 +83,16 @@ cargo build            # debug build
 The UI files are plain HTML and can be opened directly in a browser — `ui/main.html`
 and `ui/panel.html` fall back to mock data when `window.__TAURI_INTERNALS__` is absent,
 so layout work needs no Rust rebuild.
+
+## Build a portable release
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\make-portable.ps1
+```
+
+Produces `dist/Toolbox-portable-<version>/` and a matching `.zip` containing
+`toolbox.exe`, `tools/` and an empty `data/`. Copy the folder anywhere and run the exe;
+upgrading means replacing `toolbox.exe` while `tools/` and `data/` stay untouched.
 
 ## Data directory
 
@@ -152,8 +179,8 @@ Key constraints discovered while building, worth knowing before changing window 
 
 ## Roadmap
 
-- NSIS installer + portable zip script, release signing
+- NSIS installer + release signing
 - Tool install UI: permission review before install
 - Runtime action registration from open tools
-- Panel warm-keep (5 min) instead of destroy-on-hide
+- Panel warm-keep instead of destroy-on-hide
 - `--open` file association wiring for sprite-align

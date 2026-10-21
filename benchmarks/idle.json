@@ -1,0 +1,39 @@
+{
+  "note": "Measured on Windows 11 26H2 (build 26300), 2560x1600 @150% scaling, release build 0.1.0. WebView2 processes are counted only when they are descendants of the host process; other applications on the machine have their own WebView2 instances and must not be included.",
+  "measurements": [
+    {
+      "state": "idle (ball only, no window)",
+      "timestamp": "2026-10-21T15:29:13+08:00",
+      "hostRssMb": 11.8,
+      "hostPrivateMb": 2.2,
+      "cpuPercent": 0,
+      "threads": 5,
+      "handles": 144,
+      "webviewProcs": 0,
+      "webviewRssMb": 0,
+      "totalRssMb": 11.8
+    },
+    {
+      "state": "panel open",
+      "timestamp": "2026-10-21T15:30:15+08:00",
+      "hostRssMb": 26.5,
+      "hostPrivateMb": 7.2,
+      "cpuPercent": 0,
+      "threads": 28,
+      "handles": 313,
+      "webviewProcs": 6,
+      "webviewRssMb": 338.6,
+      "totalRssMb": 365.1
+    }
+  ],
+  "targets": {
+    "idleTotalRssMb": 30,
+    "idleCpuPercent": 1,
+    "startupToBallMs": 800
+  },
+  "observations": [
+    "The idle target (<=30 MB) is met with a wide margin: 11.8 MB with zero WebView2 processes, because the floating ball is a native layered window and no webview exists until a window is opened.",
+    "The first window costs ~340 MB of WebView2 processes. This is the fixed price of the Chromium engine (browser + GPU + renderer + utility processes) and is not reducible by application code.",
+    "Closing a window destroys its webview and releases those processes again (verified by re-running the idle measurement)."
+  ]
+}

@@ -222,7 +222,9 @@ function rowIcon(tool) {
 function buildRows() {
   const q = state.query.trim().toLowerCase();
   const rows = [];
-  const enabled = state.tools.filter(t => !t.error);
+  // A tool that is switched off in the main window must not be launchable from
+  // the panel either; broken manifests are hidden the same way.
+  const enabled = state.tools.filter(t => !t.error && t.enabled !== false);
 
   for (const tool of enabled) {
     const toolHit = !q || tool.name.toLowerCase().includes(q) || tool.id.includes(q)

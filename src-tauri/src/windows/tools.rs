@@ -41,6 +41,9 @@ pub fn open(app: &AppHandle, tool_id: &str) -> Result<(), String> {
     if !manifest.error.is_empty() {
         return Err(format!("工具「{tool_id}」无法加载：{}", manifest.error));
     }
+    if !registry::is_enabled(&crate::state::load_tools(), tool_id) {
+        return Err(format!("工具「{tool_id}」已在设置中停用"));
+    }
 
     let handle = app.clone();
     let id = tool_id.to_string();
@@ -71,6 +74,9 @@ fn build(app: &AppHandle, tool_id: &str) -> Result<(), String> {
     };
     if !manifest.error.is_empty() {
         return Err(format!("工具「{tool_id}」无法加载：{}", manifest.error));
+    }
+    if !registry::is_enabled(&crate::state::load_tools(), tool_id) {
+        return Err(format!("工具「{tool_id}」已在设置中停用"));
     }
 
     let label = label_for(tool_id);
