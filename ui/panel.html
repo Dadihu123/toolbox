@@ -35,7 +35,14 @@
     border: 1px solid var(--line);
     border-radius: 14px;
     overflow: hidden;
-    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+    /* Deliberately no outer box-shadow. The window is exactly this element's
+       rectangle and transparent, so a drop shadow would be clipped at the
+       window edge and only survive inside the four border-radius corner
+       cut-outs — showing up as the semi-transparent right-angle haze the
+       rounded panel is supposed to hide. Elevation stays inside the shape. */
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.05),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.02);
   }
   /* ---- search ---- */
   #searchbar {
@@ -343,6 +350,33 @@ async function load() {
     $results.innerHTML = `<div class="empty">加载失败：${String(e)}</div>`;
   }
 }
+
+// -------------------------------------------------------------------- drag
+// decorations(false) means there is no native title bar to grab, and
+// `data-tauri-drag-region` is inert here: withGlobalTauri is false, so
+// bundle.global.js (the script that installs that listener) is never injected.
+// Call the window plugin command directly — the tauri 2 JS API is just
+// `invoke("plugin:window|start_dragging", { label })`.
+const NON_DRAG_TAGS = new Set(["INPUT", "BUTTON", "A", "SELECT", "TEXTAREA", "LABEL", "SUMMARY"]);
+
+function isDragSurface(target) {
+  for (let el = target; el && el !== document.body; el = el.parentElement) {
+    if (!(el instanceof HTMLElement)) continue;
+    if (NON_DRAG_TAGS.has(el.tagName) || el.isContentEditable) return false;
+    if (el.classList.contains("row") || el.classList.contains("fbtn")) return false;
+    if (el.id === "panel") return true;
+  }
+  return false;
+}
+
+document.addEventListener("mousedown", (e) => {
+  if (e.button !== 0 || !HOSTED || !isDragSurface(e.target)) return;
+  // Keep the search box focused: the default mousedown action would move the
+  // focus to the document body.
+  e.preventDefault();
+  window.__TAURI_INTERNALS__.invoke("plugin:window|start_dragging", { label: "panel" })
+    .catch((err) => console.warn("[panel] start_dragging failed:", err));
+});
 
 // ------------------------------------------------------------------ events
 $search.addEventListener("input", () => {

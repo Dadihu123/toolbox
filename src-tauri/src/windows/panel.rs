@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, LogicalPosition, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const LABEL: &str = "panel";
 
@@ -24,6 +24,57 @@ fn warm_ttl() -> std::time::Duration {
 /// Bumped on every show/hide. A scheduled teardown only fires while its token is
 /// still current — that is how reopening the panel cancels the destroy task.
 static WARM_TOKEN: AtomicU64 = AtomicU64::new(0);
+
+/// Wall-clock millisecond timestamp of the last time the panel was shown.
+///
+/// A blur event that arrives immediately after a show is not the user clicking
+/// somewhere else: the webview can lose/regain focus while it initialises, and
+/// the shell sometimes hands focus back to the window that was active before.
+/// Closing on those events would make the panel flash open and disappear.
+static LAST_SHOW_MS: AtomicU64 = AtomicU64::new(0);
+
+/// Bumped whenever the panel window regains focus.
+///
+/// A pending blur-close re-reads this token: if it changed, the window got focus
+/// back before the grace period expired and the blur was just WebView2 bouncing
+/// focus between its document and the window, not the user leaving.
+static FOCUS_TOKEN: AtomicU64 = AtomicU64::new(0);
+
+/// Blur events this soon after a show are ignored (see [`LAST_SHOW_MS`]).
+const BLUR_GRACE_MS: u64 = 250;
+
+/// How long a blur has to last before it counts as "the user clicked outside".
+///
+/// Clicking anywhere *inside* the panel makes WebView2 blur and immediately
+/// refocus its document (measured: 4–10 ms apart), and the same bounce happens
+/// when the search input takes focus. Acting on the blur directly closed the
+/// panel on every inside click — so "click outside closes it" waits this long
+/// and gives up if the window got focus back in the meantime.
+const BLUR_SETTLE_MS: u64 = 180;
+
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+fn mark_shown() {
+    LAST_SHOW_MS.store(now_ms(), Ordering::SeqCst);
+}
+
+fn mark_focused() {
+    FOCUS_TOKEN.fetch_add(1, Ordering::SeqCst);
+}
+
+fn focus_token() -> u64 {
+    FOCUS_TOKEN.load(Ordering::SeqCst)
+}
+
+fn shown_recently() -> bool {
+    let last = LAST_SHOW_MS.load(Ordering::SeqCst);
+    now_ms().saturating_sub(last) < BLUR_GRACE_MS
+}
 
 fn cancel_warm_destroy() {
     WARM_TOKEN.fetch_add(1, Ordering::SeqCst);
@@ -108,8 +159,14 @@ pub fn toggle(app: &AppHandle) {
             return;
         }
         cancel_warm_destroy();
+        // A warm panel keeps the position it was created with. The ball may have
+        // been dragged elsewhere since, so re-anchor before making it visible —
+        // moving a hidden window avoids a visible jump at the old spot.
+        let (x, y) = anchor(app);
+        let _ = win.set_position(LogicalPosition::new(x, y));
         let _ = win.show();
         let _ = win.set_focus();
+        mark_shown();
         crate::windows::ball::expand();
         return;
     }
@@ -148,8 +205,54 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
 
+    // Click-outside-to-close: the panel is a transient popup, so losing focus to
+    // another window means the user moved on. Go through hide() so the ball
+    // collapses and the warm-keep timer starts exactly like every other close
+    // path. Three guards stop this from fighting the show sequence:
+    //   * never act on a window that is already hidden — hiding the panel makes
+    //     it lose focus too, which would otherwise re-enter hide();
+    //   * ignore blur inside the grace window right after a show (see
+    //     LAST_SHOW_MS);
+    //   * wait BLUR_SETTLE_MS and re-check the focus token, because WebView2
+    //     bounces focus on every click inside the panel (see BLUR_SETTLE_MS).
+    let handle = app.clone();
+    win.on_window_event(move |event| {
+        match event {
+            tauri::WindowEvent::Focused(true) => mark_focused(),
+            tauri::WindowEvent::Focused(false) => {
+                if let Some(w) = handle.get_webview_window(LABEL) {
+                    if !w.is_visible().unwrap_or(false) || shown_recently() {
+                        return;
+                    }
+                }
+                let token = focus_token();
+                let handle = handle.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(BLUR_SETTLE_MS));
+                    // Focus came back: the blur was WebView2 handing focus
+                    // between the window and its document, not the user leaving.
+                    if focus_token() != token {
+                        return;
+                    }
+                    let Some(w) = handle.get_webview_window(LABEL) else {
+                        return;
+                    };
+                    if !w.is_visible().unwrap_or(false) {
+                        return;
+                    }
+                    // A window that still owns the foreground after settling was
+                    // never really left (e.g. a click on its own non-client area).
+                    crate::logging::write("info", "panel", "hidden because the window lost focus");
+                    hide(&handle);
+                });
+            }
+            _ => {}
+        }
+    });
+
     let _ = win.show();
     let _ = win.set_focus();
+    mark_shown();
     cancel_warm_destroy();
     Ok(())
 }
