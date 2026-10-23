@@ -7,8 +7,18 @@ First packaged build of the host: portable folder/zip plus an NSIS installer.
 ### Host
 
 - Native Win32 floating ball: layered popup window, right-edge dock, 14 px peek,
-  hover slide-out, drag + edge snapping, right-click menu, per-monitor DPI.
-  Software-rasterised (4×4 supersampling) so it does not depend on GDI+/Direct2D.
+  hover slide-out, right-click menu, per-monitor DPI. Dragging follows the pointer 1:1
+  (mouse capture, no drift), the ball only docks when released within 24 px of a side
+  edge, and otherwise stays exactly where it was dropped; position and dock state are
+  persisted in `config.json`. Software-rasterised (4×4 supersampling) so it does not
+  depend on GDI+/Direct2D.
+- Hover quick icons: resting the pointer on the ball fans the configured tools out
+  around it — a half fan opening away from the screen edge while docked, a full circle
+  while floating, one or two rings depending on the icon count. The fan is a native
+  layered window (no webview), stays open while the pointer crosses from the ball onto
+  the icons, never appears while the ball is being dragged, and clicking a chip opens
+  that tool. Per-zone icon slots, count, rings and a live demo box live in
+  Settings → 悬停快捷图标.
 - Global hotkeys registered per action, with conflict detection and rebinding.
   Actions marked `requiresOpen` only bind while their tool window is open. Tools can add
   actions at runtime through the bridge; those are registered while the window is open and
@@ -17,9 +27,14 @@ First packaged build of the host: portable folder/zip plus an NSIS installer.
   anchored next to the ball. Hiding it keeps the webview warm for 5 minutes
   (`TOOLBOX_PANEL_WARM_SECS` overrides that for development) so reopening is instant, then
   destroys it to give the WebView2 footprint back. Reopening inside the window cancels the
-  scheduled teardown.
+  scheduled teardown. The frameless panel can be dragged by its search bar and closes when
+  focus really leaves it; clicks inside the panel no longer count as "outside" (WebView2
+  bounces focus on every click, so the close is deferred and cancelled if focus returns).
+  Its rounded corners are genuinely transparent — no clipped drop shadow behind them.
 - Main window (`Ctrl+Shift+M`): tools, hotkeys, settings, about, official tool market.
-- Tray icon with panel / main / quit.
+- Tray icon with panel / main / quit. Building it never blocks startup and never retries
+  into duplicate icons: a session that refuses `Shell_NotifyIcon` only produces one warning
+  (the ball's right-click menu offers the same commands).
 - Single instance: a second launch forwards its CLI arguments into the running app.
 - CLI: `--tool <id>`, `--open <file>`, `--panel`, `--main`, `--quiet`, `--data-dir <path>`.
   A bare file path (shell file association / drag onto the exe) and `--open` without
@@ -72,6 +87,11 @@ First packaged build of the host: portable folder/zip plus an NSIS installer.
 
 - `sprite-align` 1.0.0 as the first official tool, running unmodified under the protocol.
   Download interception routes its `<a download>` exports into `data/downloads`.
+- Tool windows are ordinary app windows: native caption with minimise / maximise / close,
+  resize borders, drag by the title bar, dark caption, and the tool's own icon in both the
+  title bar and the taskbar (`icon.svg` is rasterised with `resvg`; a generic glyph is used
+  when a tool has no icon). `tool.json` sizes are sanitised, and a minimum size never
+  exceeds the initial size.
 
 ### Known limitations
 
