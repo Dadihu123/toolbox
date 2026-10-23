@@ -11,16 +11,26 @@ hotkey opens a search panel; each tool runs in its own sandboxed webview.
 ## What works today
 
 - **Floating ball** — native Win32 layered window (not a webview), docked to the right
-  edge, collapsed to a 14 px sliver, slides out on hover, drag to move, snaps back to
-  the nearest edge, right-click for a menu.
+  edge, collapsed to a 14 px sliver, slides out on hover, right-click for a menu. Drag it
+  anywhere: it follows the pointer 1:1 and only docks when released within 24 px of a side
+  edge, otherwise it stays exactly where you dropped it (position and dock state persist).
+- **Quick icons** — rest the pointer on the ball and the tools you picked fan out around
+  it: a half fan opening away from the screen edge while docked, a full circle while
+  floating, one or two rings depending on the count. The fan is native (no webview), stays
+  open while you move onto an icon, hides while the ball is being dragged, and a click
+  opens that tool. Slots per ball position, icon count and rings are configured in
+  Settings → 悬停快捷图标, with a live hover preview.
 - **Panel** — `Ctrl+Shift+T`, search across tool names *and* tool actions, ↑↓/Enter/Esc,
-  opens next to the ball. Hiding it keeps the webview warm for 5 minutes (instant reopen),
-  then releases it so the idle footprint comes back.
+  opens next to the ball. Drag it by the search bar; it closes when focus really leaves
+  (clicks inside it do not count). Hiding it keeps the webview warm for 5 minutes (instant
+  reopen), then releases it so the idle footprint comes back.
 - **Main window** — `Ctrl+Shift+M`, tools / hotkeys / settings / about + official tool
   market.
 - **Tool sandbox** — every tool gets its own origin (`toolbox://localhost/<id>/`) and its
   own webview. Zero Tauri permissions; all privileged work goes through a capability
-  checked bridge.
+  checked bridge. Tool windows are normal app windows: native title bar with
+  minimise/maximise/close, resize borders, drag by the caption, and the tool's own icon in
+  the title bar and taskbar.
 - **Reviewed installs** — a zip is unpacked and validated first, then shown in a permission
   review dialog (author/version/size, one checkbox per permission, upgrade notice).
   Only the ticked permissions are granted and persisted; the bridge enforces the grant at
