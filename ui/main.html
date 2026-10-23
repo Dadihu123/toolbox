@@ -1611,10 +1611,12 @@ function quickDemoPositions(zone, count, rings) {
 function quickDemoMargins(zone, count, rings) {
   const positions = quickDemoPositions(zone, count, rings);
   const half = QUICK_DEMO_CHIP / 2;
-  let left = half + QUICK_DEMO_PAD;
-  let right = left;
-  let top = left;
-  let bottom = left;
+  // The ball itself must stay fully visible too, not just the chips.
+  const base = Math.max(QUICK_DEMO_BALL / 2 + 2, half + QUICK_DEMO_PAD);
+  let left = base;
+  let right = base;
+  let top = base;
+  let bottom = base;
   for (const p of positions) {
     left = Math.max(left, -p.x + half + QUICK_DEMO_PAD);
     right = Math.max(right, p.x + half + QUICK_DEMO_PAD);
