@@ -18,7 +18,12 @@ First packaged build of the host: portable folder/zip plus an NSIS installer.
   layered window (no webview), stays open while the pointer crosses from the ball onto
   the icons, never appears while the ball is being dragged, and clicking a chip opens
   that tool. Per-zone icon slots, count, rings and a live demo box live in
-  Settings → 悬停快捷图标.
+  Settings → 悬停快捷图标. The demo lays its chips out with the same chord-based
+  radius as the native fan, keeps them inside the preview box and constrains each
+  tool icon to its chip, so nothing overlaps or spills over the frame.
+- Ball clicks are only accepted for a fresh press released on the visible disc, and
+  the quick-menu poll no longer re-places the window under a resting pointer: clicking
+  the ball opens the panel on the first click even while the fan is open.
 - Global hotkeys registered per action, with conflict detection and rebinding.
   Actions marked `requiresOpen` only bind while their tool window is open. Tools can add
   actions at runtime through the bridge; those are registered while the window is open and
@@ -31,6 +36,8 @@ First packaged build of the host: portable folder/zip plus an NSIS installer.
   focus really leaves it; clicks inside the panel no longer count as "outside" (WebView2
   bounces focus on every click, so the close is deferred and cancelled if focus returns).
   Its rounded corners are genuinely transparent — no clipped drop shadow behind them.
+  Rapid clicks reuse the warm panel instead of racing to create a second webview with the
+  same label (which used to log `open failed: a webview with label 'panel' already exists`).
 - Main window (`Ctrl+Shift+M`): tools, hotkeys, settings, about, official tool market.
 - Tray icon with panel / main / quit. Building it never blocks startup and never retries
   into duplicate icons: a session that refuses `Shell_NotifyIcon` only produces one warning

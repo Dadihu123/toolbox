@@ -645,6 +645,12 @@ impl Menu {
     fn tick_closed(&mut self) {
         let now = Instant::now();
 
+        // The panel is a warm-kept window that hides instead of closing. Its
+        // visibility has to be re-probed while the fan is *closed* too: after
+        // the panel has been opened once, a stale `true` here would keep the
+        // fan suppressed forever (only a restart brought it back).
+        self.check_panel(false);
+
         // Pull in an explicit request from the ball's hover handler, if any.
         if let Ok(mut slot) = REQUEST.lock() {
             if let Some(req) = slot.take() {
@@ -762,6 +768,12 @@ impl Menu {
         // always laid out around the visible ball, never around the peek sliver.
         let (bcx, bcy) = rect_center(ball_rect);
         let (wx, wy, ww, wh) = window_for_layout(&layout, (bcx as f32, bcy as f32), &m);
+        // Keep the whole fan on screen: a floating ball near a corner would
+        // otherwise push the outer chips past the monitor edge. Clamping the
+        // window origin moves the chips with it (their centres are relative).
+        let area = work_area_at(POINT { x: bcx, y: bcy });
+        let wx = wx.clamp(area.left, (area.right - ww).max(area.left));
+        let wy = wy.clamp(area.top, (area.bottom - wh).max(area.top));
 
         let chip_px = m.chip().round() as i32;
         let glow_px = m.glow().round() as i32;

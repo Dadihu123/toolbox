@@ -351,9 +351,13 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 @keyframes qm-hint-pulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
 .qm-stage.is-open .qm-ball-hint, .qm-stage.is-dragging .qm-ball-hint, .qm-stage.is-off .qm-ball-hint { opacity: 0; animation: none; }
 .qm-fan { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
-.qm-fan-item { position: absolute; left: var(--ox, 50%); top: var(--oy, 50%); width: 33px; height: 33px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 10px; background: var(--bg2); box-shadow: 0 6px 16px rgba(0, 0, 0, .42); opacity: 0; pointer-events: none; transform: translate(-50%, -50%) scale(.3); transition: transform .32s cubic-bezier(.22, .9, .28, 1.14) var(--qd, 0ms), opacity .18s ease var(--qd, 0ms); }
+.qm-fan-item { position: absolute; left: var(--ox, 50%); top: var(--oy, 50%); width: 26px; height: 26px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 8px; background: var(--bg2); box-shadow: 0 5px 12px rgba(0, 0, 0, .42); opacity: 0; pointer-events: none; overflow: hidden; transform: translate(-50%, -50%) scale(.3); transition: transform .32s cubic-bezier(.22, .9, .28, 1.14) var(--qd, 0ms), opacity .18s ease var(--qd, 0ms); }
 .qm-stage.is-open .qm-fan-item { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) translate(var(--dx, 0), var(--dy, 0)) scale(1); }
-.qm-fan-item .qm-fan-ico { display: grid; place-items: center; width: 23px; height: 23px; border-radius: 7px; font-size: 11px; font-weight: 600; transition: transform .14s ease; }
+.qm-fan-item .qm-fan-ico { display: grid; place-items: center; width: 18px; height: 18px; border-radius: 5px; font-size: 9px; font-weight: 600; transition: transform .14s ease; }
+/* The avatar <img> is the tool's raw SVG: without this it renders at the SVG's
+   intrinsic size and spills out of the chip (the icons looked huge and
+   overlapping). */
+.qm-fan-ico img { width: 100%; height: 100%; display: block; border-radius: inherit; object-fit: contain; }
 .qm-fan-item:hover { border-color: var(--fg-faint); }
 .qm-fan-item:hover .qm-fan-ico { transform: scale(1.12); }
 .qm-demo-foot { display: flex; align-items: center; gap: 7px; margin-top: 9px; color: var(--fg-faint); font-size: 10.5px; }
@@ -1300,8 +1304,6 @@ const QUICK_MENU_ZONES = [
   { id: 'right', label: '屏幕右边缘', dir: '贴右边缘 · 向左展开' },
   { id: 'center', label: '自由浮动', dir: '不贴边 · 环绕展开' }
 ];
-// Inner / outer ring radii of the mini preview, in px.
-const QUICK_MENU_RADII = [54, 94];
 
 /** Clamp a raw `quickMenu` config blob to the shape the Rust host persists. */
 function normalizeQuickMenu(raw) {
@@ -1544,30 +1546,54 @@ function quickDemoScheduleClose(delay) {
   }, typeof delay === 'number' ? delay : 300);
 }
 
+/** .qm-fan-item side, keep in sync with the CSS. */
+const QUICK_DEMO_CHIP = 26;
+/** Minimum gap between two neighbouring chips. */
+const QUICK_DEMO_GAP = 10;
+/** Transparent breathing room around the chips inside the preview box. */
+const QUICK_DEMO_PAD = 8;
+/** .qm-ball side (the preview ball), used for the inner-ring clearance. */
+const QUICK_DEMO_BALL = 44;
+
 /**
  * Icon positions around the ball. Edge zones fan out in a half circle (to the
  * right for a left-edge dock, to the left for a right-edge dock); a floating
  * ball fans out in a full circle. Two layers split the icons across an inner
  * and outer ring, like the native window does.
+ *
+ * The ring radius is derived from the chip size and how many chips share the
+ * ring (chord = 2R·sin(pitch/2)), exactly like `quickmenu.rs` does. Fixed radii
+ * made neighbouring chips overlap as soon as a ring held more than a handful.
  */
 function quickDemoPositions(zone, count, rings) {
   const positions = [];
   if (!count) return positions;
-  const twoRings = rings === 2 && count > 1;
-  const innerCount = twoRings ? Math.max(1, Math.round(count / 3)) : count;
-  const groups = twoRings ? [innerCount, count - innerCount] : [count];
-  const radii = twoRings ? QUICK_MENU_RADII : [86];
-  groups.forEach((total, ring) => {
-    const radius = radii[ring];
-    for (let i = 0; i < total; i += 1) {
+  const cap = zone === 'center' ? 8 : 5;
+  const total = rings === 2 || count <= cap ? count : cap;
+  const twoRings = rings === 2 && total > cap;
+  const groups = twoRings ? [cap, total - cap] : [total];
+
+  const half = QUICK_DEMO_CHIP / 2;
+  const minDistance = QUICK_DEMO_CHIP + QUICK_DEMO_GAP;
+  const minRadius = QUICK_DEMO_BALL / 2 + 12 + half;
+  let previous = 0;
+
+  groups.forEach((n, ring) => {
+    const full = zone === 'center';
+    const span = full ? Math.PI * 2 : (Math.PI / 180) * (ring === 0 ? 108 : 142);
+    const pitch = n > 1 ? (full ? (Math.PI * 2) / n : span / (n - 1)) : 0;
+    const needed = n > 1 ? minDistance / (2 * Math.sin(pitch / 2)) : minRadius;
+    const floor = ring === 0 ? minRadius : previous + QUICK_DEMO_CHIP + 12;
+    const radius = Math.max(needed, floor);
+    previous = radius;
+    for (let i = 0; i < n; i += 1) {
       let angle;
-      if (zone === 'center') {
-        const step = (Math.PI * 2) / total;
-        angle = -Math.PI / 2 + step * (i + (ring === 1 && total > 1 ? 0.5 : 0));
+      if (full) {
+        const step = (Math.PI * 2) / n;
+        angle = -Math.PI / 2 + step * (i + (ring === 1 && n > 1 ? 0.5 : 0));
       } else {
-        const span = (Math.PI / 180) * (ring === 0 ? 108 : 142);
         const base = zone === 'left' ? 0 : Math.PI;
-        angle = base + (total > 1 ? -span / 2 + (span / (total - 1)) * i : 0);
+        angle = base + (n > 1 ? -span / 2 + (span / (n - 1)) * i : 0);
       }
       positions.push({ x: Math.cos(angle) * radius, y: Math.sin(angle) * radius });
     }
@@ -1575,18 +1601,83 @@ function quickDemoPositions(zone, count, rings) {
   return positions;
 }
 
+/**
+ * How much room the open fan needs on each side of the ball.
+ *
+ * The preview box is only ~260 px tall, so a ball dragged into a corner would
+ * push the outer ring under the clipped border. Keeping the ball inside this
+ * inset is what makes every chip stay visible without shrinking the fan.
+ */
+function quickDemoMargins(zone, count, rings) {
+  const positions = quickDemoPositions(zone, count, rings);
+  const half = QUICK_DEMO_CHIP / 2;
+  let left = half + QUICK_DEMO_PAD;
+  let right = left;
+  let top = left;
+  let bottom = left;
+  for (const p of positions) {
+    left = Math.max(left, -p.x + half + QUICK_DEMO_PAD);
+    right = Math.max(right, p.x + half + QUICK_DEMO_PAD);
+    top = Math.max(top, -p.y + half + QUICK_DEMO_PAD);
+    bottom = Math.max(bottom, p.y + half + QUICK_DEMO_PAD);
+  }
+  return { left, right, top, bottom };
+}
+
+/** Region the preview ball may occupy without pushing chips out of the box. */
+function quickDemoSafeBox(stage) {
+  const width = stage.clientWidth || 640;
+  const height = stage.clientHeight || 254;
+  const qm = (state.data && state.data.quickMenu) || { count: 5, rings: 2, enabled: true };
+  const count = quickDemo.countOverride || qm.count;
+  const ids = qm.enabled ? quickMenuResolve(qm[quickDemo.zone], count) : [];
+  const m = quickDemoMargins(quickDemo.zone, Math.max(1, ids.length), qm.rings);
+  const minX = Math.min(m.left, width / 2);
+  const maxX = Math.max(width - m.right, minX);
+  const minY = Math.min(m.top, height / 2);
+  const maxY = Math.max(height - m.bottom, minY);
+  return { minX, maxX, minY, maxY };
+}
+
+/**
+ * Shrink the fan radii until every chip stays inside the preview stage.
+ *
+ * Safety net for a squeezed window: the safe box normally guarantees a full
+ * size fan, but a very small stage may still need a smaller one.
+ */
+function quickDemoFit(positions, origin, stage) {
+  const half = QUICK_DEMO_CHIP / 2;
+  const pad = QUICK_DEMO_PAD;
+  const width = stage.clientWidth || 640;
+  const height = stage.clientHeight || 254;
+  let scale = 1;
+  for (const p of positions) {
+    if (Math.abs(p.x) > 0.5) {
+      const room = p.x >= 0 ? width - pad - half - origin.x : origin.x - pad - half;
+      scale = Math.min(scale, room / Math.abs(p.x));
+    }
+    if (Math.abs(p.y) > 0.5) {
+      const room = p.y >= 0 ? height - pad - half - origin.y : origin.y - pad - half;
+      scale = Math.min(scale, room / Math.abs(p.y));
+    }
+  }
+  scale = Math.max(0.5, Math.min(1, scale));
+  return positions.map((p) => ({ x: p.x * scale, y: p.y * scale }));
+}
+
 function quickDemoOrigin(stage) {
   const width = stage.clientWidth || 640;
   const height = stage.clientHeight || 254;
+  const box = quickDemoSafeBox(stage);
   const anchorY = quickDemo.fy != null ? quickDemo.fy * height : height / 2;
   let anchorX;
   if (quickDemo.fx != null) anchorX = quickDemo.fx * width;
-  else if (quickDemo.zone === 'left') anchorX = 38;
-  else if (quickDemo.zone === 'right') anchorX = width - 38;
+  else if (quickDemo.zone === 'left') anchorX = box.minX;
+  else if (quickDemo.zone === 'right') anchorX = box.maxX;
   else anchorX = width / 2;
   return {
-    x: Math.min(width - 34, Math.max(34, anchorX)),
-    y: Math.min(height - 46, Math.max(46, anchorY))
+    x: Math.min(box.maxX, Math.max(box.minX, anchorX)),
+    y: Math.min(box.maxY, Math.max(box.minY, anchorY))
   };
 }
 
@@ -1615,14 +1706,18 @@ function mountQuickDemo() {
 
   const count = quickDemo.countOverride || qm.count;
   const ids = qm.enabled ? quickMenuResolve(qm[quickDemo.zone], count) : [];
-  const positions = quickDemoPositions(quickDemo.zone, ids.length, qm.rings);
+  const positions = quickDemoFit(
+    quickDemoPositions(quickDemo.zone, ids.length, qm.rings),
+    origin,
+    stage
+  );
   const fan = $('#qmFan');
   if (fan) {
     fan.innerHTML = ids.map((id, index) => {
       const tool = state.data.tools.find((item) => item.id === id);
       if (!tool) return '';
       const position = positions[index] || { x: 0, y: 0 };
-      return `<div class="qm-fan-item" title="${escapeAttr(tool.name)}" style="--dx:${position.x.toFixed(1)}px;--dy:${position.y.toFixed(1)}px;--qd:${index * 26}ms">${quickToolAvatar(tool, 'qm-fan-ico', 23)}</div>`;
+      return `<div class="qm-fan-item" title="${escapeAttr(tool.name)}" style="--dx:${position.x.toFixed(1)}px;--dy:${position.y.toFixed(1)}px;--qd:${index * 26}ms">${quickToolAvatar(tool, 'qm-fan-ico', 18)}</div>`;
     }).join('');
   }
   quickDemoSetOpen(quickDemo.open);
@@ -1694,8 +1789,10 @@ function onQuickDemoPointerMove(event) {
   if (!stage) return;
   const rect = stage.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
-  const x = Math.min(rect.width - 34, Math.max(34, event.clientX - rect.left - quickDemo.offsetX));
-  const y = Math.min(rect.height - 46, Math.max(46, event.clientY - rect.top - quickDemo.offsetY));
+  // Keep the ball inside the region where the open fan still fits.
+  const box = quickDemoSafeBox(stage);
+  const x = Math.min(box.maxX, Math.max(box.minX, event.clientX - rect.left - quickDemo.offsetX));
+  const y = Math.min(box.maxY, Math.max(box.minY, event.clientY - rect.top - quickDemo.offsetY));
   quickDemo.fx = x / rect.width;
   quickDemo.fy = y / rect.height;
   stage.style.setProperty('--ox', `${x}px`);

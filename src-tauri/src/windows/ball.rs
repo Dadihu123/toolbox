@@ -19,7 +19,7 @@
 #![cfg(windows)]
 
 use std::cell::RefCell;
-use std::sync::atomic::{AtomicBool, AtomicIsize, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::OnceLock;
 
 use tauri::AppHandle;
@@ -57,14 +57,12 @@ const TIMER_SLIDE: usize = 1;
 const TIMER_COLLAPSE: usize = 2;
 const COLLAPSE_DELAY_MS: u32 = 220;
 const DRAG_THRESHOLD: i32 = 4;
-/// While the hover slide animates the window, Windows synthesises mouse clicks
-/// on the no-activate layered window as it passes under the stationary pointer.
-/// Those must not open the panel; this is how long they are ignored after a
-/// slide starts (the animation itself is ~10 timer ticks at 12 ms).
-const SLIDE_IGNORE_CLICKS_MS: u64 = 320;
-
-/// Clicks are ignored until this wall-clock millisecond (see [`SLIDE_IGNORE_CLICKS_MS`]).
-static IGNORE_CLICKS_UNTIL: AtomicU64 = AtomicU64::new(0);
+/// A press that is older than this cannot become a click any more.
+///
+/// If the matching button-up is lost (another window stole the capture, the
+/// session switched, ...), `pressed` would otherwise stay true forever and the
+/// *next* release anywhere would be read as a click on the ball.
+const PRESS_MAX_AGE_MS: u64 = 1500;
 
 /// Private message used to drive the window from other threads (the tray, the
 /// panel or an IPC handler) without touching the window's thread-local state.
@@ -77,17 +75,12 @@ const CMD_TOGGLE_VISIBLE: usize = 4;
 /// The ball window handle, for code running off the window thread.
 static BALL_HWND: AtomicIsize = AtomicIsize::new(0);
 
-/// Wall-clock milliseconds; the click-ignore window needs a shared clock.
+/// Wall-clock milliseconds (press-age guard).
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
-}
-
-/// Are clicks currently suppressed because the ball is sliding?
-fn clicks_ignored() -> bool {
-    now_ms() < IGNORE_CLICKS_UNTIL.load(Ordering::SeqCst)
 }
 
 fn ball_hwnd() -> Option<HWND> {
@@ -160,6 +153,8 @@ struct Ball {
     expanded: bool,
     hovering: bool,
     pressed: bool,
+    /// Wall-clock ms of the press that set `pressed` (see PRESS_MAX_AGE_MS).
+    pressed_at: u64,
     dragging: bool,
     drag_origin: POINT,
     win_origin: POINT,
@@ -263,6 +258,7 @@ pub fn init(handle: &AppHandle) -> Result<(), String> {
                 expanded: false,
                 hovering: false,
                 pressed: false,
+                pressed_at: 0,
                 dragging: false,
                 drag_origin: POINT::default(),
                 win_origin: POINT::default(),
@@ -451,6 +447,25 @@ fn geometry_after_release(area: &RECT, released: &RECT) -> Geometry {
     }
 }
 
+/// Is `pt` (screen pixels) on the visible disc of the ball window?
+///
+/// The window is 64x64 but the disc is inset by [`PADDING`]; the transparent
+/// margin must not turn into a click target.
+fn point_on_ball(hwnd: HWND, pt: POINT) -> bool {
+    let mut wr = RECT::default();
+    unsafe {
+        if GetWindowRect(hwnd, &mut wr).is_err() {
+            return false;
+        }
+    }
+    let cx = (wr.left + wr.right) as f32 / 2.0;
+    let cy = (wr.top + wr.bottom) as f32 / 2.0;
+    let r = BALL_SIZE as f32 / 2.0 - PADDING + 2.0;
+    let dx = pt.x as f32 - cx;
+    let dy = pt.y as f32 - cy;
+    dx * dx + dy * dy <= r * r
+}
+
 /// Move the ball window to `geometry` (physical pixels).
 fn place(hwnd: HWND, geometry: Geometry, expanded: bool) {
     let area = work_area(hwnd);
@@ -499,6 +514,29 @@ fn slide(hwnd: HWND, expand: bool) {
     }
     let to = target_x(&area, geometry.side_right, expand);
     let dist = (to - wr.left).abs();
+
+    // The quick menu calls `expand()` on every poll tick while the fan is open.
+    // Restarting the slide timer (or re-placing the window) on each of those
+    // ticks would make the animation stutter and would move the window under a
+    // stationary pointer over and over. Both are no-ops when the ball is already
+    // at its target or already sliding towards it.
+    let already_heading_there = BALL.with(|b| {
+        b.borrow()
+            .as_ref()
+            .map(|ball| ball.slide_step != 0 && ball.slide_to == to)
+            .unwrap_or(false)
+    });
+    if already_heading_there {
+        return;
+    }
+    if dist < 2 {
+        BALL.with(|b| {
+            if let Some(ball) = b.borrow_mut().as_mut() {
+                ball.slide_step = 0;
+            }
+        });
+        return;
+    }
     BALL.with(|b| {
         if let Some(ball) = b.borrow_mut().as_mut() {
             ball.slide_to = to;
@@ -506,19 +544,9 @@ fn slide(hwnd: HWND, expand: bool) {
         }
     });
     if dist < 6 {
-        // Even a tiny reposition moves the window under the pointer, which is
-        // enough for Windows to synthesise a click; suppress those too.
-        IGNORE_CLICKS_UNTIL.store(now_ms() + SLIDE_IGNORE_CLICKS_MS, Ordering::SeqCst);
         place(hwnd, geometry, expand);
         return;
     }
-    // Moving a no-activate layered window under a stationary pointer makes
-    // Windows synthesise a click on it. The slide is a pure hover animation, so
-    // clicks that land while it runs are ignored (see IGNORE_CLICKS_UNTIL).
-    IGNORE_CLICKS_UNTIL.store(
-        now_ms() + SLIDE_IGNORE_CLICKS_MS,
-        Ordering::SeqCst,
-    );
     unsafe {
         SetTimer(Some(hwnd), TIMER_SLIDE, 12, None);
     }
@@ -996,6 +1024,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                         y: wr.top,
                     };
                     ball.pressed = true;
+                    ball.pressed_at = now_ms();
                     ball.dragging = false;
                 }
             });
@@ -1022,13 +1051,17 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 // under a stationary pointer (the hover slide does exactly that),
                 // and treating it as a click opened the panel on its own.
                 let was_pressed = ball.pressed;
+                let press_age = now_ms().saturating_sub(ball.pressed_at);
                 let moved = ball.dragging
                     || (pt.x - ball.drag_origin.x).abs() > DRAG_THRESHOLD
                     || (pt.y - ball.drag_origin.y).abs() > DRAG_THRESHOLD;
                 ball.pressed = false;
                 ball.dragging = false;
                 if !moved {
-                    if was_pressed && !clicks_ignored() {
+                    // Only a fresh press that is released on the visible ball is
+                    // a click. A stale press (lost button-up) or a release that
+                    // came from another window's capture must not open the panel.
+                    if was_pressed && press_age <= PRESS_MAX_AGE_MS && point_on_ball(hwnd, pt) {
                         clicked = true;
                     }
                     return;

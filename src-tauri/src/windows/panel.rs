@@ -40,6 +40,29 @@ static LAST_SHOW_MS: AtomicU64 = AtomicU64::new(0);
 /// focus between its document and the window, not the user leaving.
 static FOCUS_TOKEN: AtomicU64 = AtomicU64::new(0);
 
+/// True while a panel webview is being created. Two opens that race before the
+/// first window exists must not both call the builder.
+static CREATING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// RAII guard for [`CREATING`].
+struct CreatingGuard;
+
+impl CreatingGuard {
+    fn acquire() -> Option<Self> {
+        if CREATING.swap(true, Ordering::SeqCst) {
+            None
+        } else {
+            Some(Self)
+        }
+    }
+}
+
+impl Drop for CreatingGuard {
+    fn drop(&mut self) {
+        CREATING.store(false, Ordering::SeqCst);
+    }
+}
+
 /// Blur events this soon after a show are ignored (see [`LAST_SHOW_MS`]).
 const BLUR_GRACE_MS: u64 = 250;
 
@@ -188,6 +211,26 @@ fn webview_data_dir() -> PathBuf {
 }
 
 pub fn open(app: &AppHandle) -> Result<(), String> {
+    // A warm panel (hidden but alive) already owns the `panel` label. Reuse it:
+    // rapid clicks on the ball used to queue several deferred opens, and every
+    // one after the first failed with "a webview with label `panel` already
+    // exists".
+    if let Some(win) = app.get_webview_window(LABEL) {
+        cancel_warm_destroy();
+        let (x, y) = anchor(app);
+        let _ = win.set_position(LogicalPosition::new(x, y));
+        let _ = win.show();
+        let _ = win.set_focus();
+        mark_shown();
+        crate::windows::ball::expand();
+        return Ok(());
+    }
+
+    // Belt and braces for two opens racing before the first window exists.
+    let Some(_creating) = CreatingGuard::acquire() else {
+        return Ok(());
+    };
+
     let (x, y) = anchor(app);
     let win = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("panel.html".into()))
         .title("Toolbox Panel")
