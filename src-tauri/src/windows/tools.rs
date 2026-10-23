@@ -6,10 +6,22 @@ use std::sync::Mutex;
 use serde_json::json;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
+use crate::icons;
 use crate::paths;
 use crate::registry;
 
 pub const PREFIX: &str = "tool-";
+
+/// Size handed to Windows for the tool icon. The taskbar draws its button icon
+/// at ~32 device px on a 100 % display and the title bar at 16, so rendering
+/// once at 32 keeps both crisp (and a 2× title bar gets a native 32 px bitmap).
+const ICON_PX: u32 = 32;
+
+/// `HICON`s created for taskbar icons, kept alive for as long as their window
+/// exists: `WM_SETICON` stores the handle, it does not copy it. Raw handles are
+/// stored as `isize` because `HICON` is a non-`Send` pointer.
+#[cfg(windows)]
+static TASKBAR_ICONS: Mutex<Vec<(String, isize)>> = Mutex::new(Vec::new());
 
 /// Pending actions waiting for a tool window to report ready.
 static PENDING: Mutex<Vec<(String, String)>> = Mutex::new(Vec::new());
@@ -88,6 +100,126 @@ fn focus(app: &AppHandle, tool_id: &str) {
     }
 }
 
+/// Initial size and minimum size for a tool window.
+///
+/// `tool.json` is user-editable, so a zero / negative / non-finite size must not
+/// reach the builder (it would create an invisible window), and a minimum larger
+/// than the initial size would fight the first resize. A missing (`0`) minimum
+/// keeps meaning "no constraint".
+fn window_metrics(spec: &registry::WindowSpec) -> (f64, f64, f64, f64) {
+    fn size(v: f64, fallback: f64) -> f64 {
+        if v.is_finite() && v >= 1.0 {
+            v
+        } else {
+            fallback
+        }
+    }
+    fn minimum(v: f64, max: f64) -> f64 {
+        if v.is_finite() && v > 0.0 {
+            v.min(max)
+        } else {
+            0.0
+        }
+    }
+    let width = size(spec.width, 1100.0);
+    let height = size(spec.height, 760.0);
+    (
+        width,
+        height,
+        minimum(spec.min_width, width),
+        minimum(spec.min_height, height),
+    )
+}
+
+/// Windows draws the taskbar button from `ICON_BIG`, but Tauri's
+/// `WebviewWindowBuilder::icon` only sets `ICON_SMALL` (tao's
+/// `set_window_icon`) — the one the title bar uses. Without a big icon the
+/// shell falls back to the host icon, so every tool looks alike in the taskbar.
+/// Create the big `HICON` here from the shared rasteriser and hand it to the
+/// window; [`release_taskbar_icon`] frees it when the window is destroyed.
+#[cfg(windows)]
+fn set_taskbar_icon(win: &tauri::WebviewWindow, tool_id: &str) {
+    use windows::Win32::Foundation::{LPARAM, WPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{SendMessageW, ICON_BIG, WM_SETICON};
+
+    let Ok(hwnd) = win.hwnd() else {
+        return;
+    };
+    let icon = icons::tool_icon_or_fallback(tool_id, ICON_PX);
+    let Some(hicon) = create_hicon(&icon) else {
+        return;
+    };
+    unsafe {
+        let _ = SendMessageW(
+            hwnd,
+            WM_SETICON,
+            Some(WPARAM(ICON_BIG as usize)),
+            Some(LPARAM(hicon.0 as isize)),
+        );
+    }
+    if let Ok(mut icons) = TASKBAR_ICONS.lock() {
+        let label = win.label().to_string();
+        icons.retain(|(l, _)| l != &label);
+        icons.push((label, hicon.0 as isize));
+    }
+}
+
+/// Destroy the taskbar `HICON` of a window that no longer exists.
+#[cfg(windows)]
+fn release_taskbar_icon(label: &str) {
+    use windows::Win32::UI::WindowsAndMessaging::{DestroyIcon, HICON};
+
+    let mut handles: Vec<isize> = Vec::new();
+    if let Ok(mut icons) = TASKBAR_ICONS.lock() {
+        icons.retain(|(l, raw)| {
+            if l == label {
+                handles.push(*raw);
+                false
+            } else {
+                true
+            }
+        });
+    }
+    for raw in handles {
+        unsafe {
+            let _ = DestroyIcon(HICON(raw as *mut _));
+        }
+    }
+}
+
+/// Build a 32bpp `HICON` from [`icons::RgbaIcon`] (straight RGBA).
+///
+/// Mirrors tao's own windows icon conversion: `CreateIcon` wants the colour
+/// bitmap as BGRA plus the legacy 1bpp AND mask derived from alpha.
+#[cfg(windows)]
+fn create_hicon(icon: &icons::RgbaIcon) -> Option<windows::Win32::UI::WindowsAndMessaging::HICON> {
+    use windows::Win32::UI::WindowsAndMessaging::CreateIcon;
+
+    let (w, h) = (icon.width, icon.height);
+    let count = (w as usize).checked_mul(h as usize)?;
+    if w == 0 || h == 0 || icon.pixels.len() < count * 4 {
+        return None;
+    }
+    let mut xor = icon.pixels[..count * 4].to_vec();
+    let mut and_mask = Vec::with_capacity(count);
+    for px in xor.chunks_exact_mut(4) {
+        and_mask.push(px[3].wrapping_sub(u8::MAX));
+        px.swap(0, 2); // RGBA -> BGRA
+    }
+    unsafe {
+        CreateIcon(
+            None,
+            w as i32,
+            h as i32,
+            1,
+            32,
+            and_mask.as_ptr(),
+            xor.as_ptr(),
+        )
+        .ok()
+    }
+}
+
 fn build(app: &AppHandle, tool_id: &str) -> Result<(), String> {
     if app.get_webview_window(&label_for(tool_id)).is_some() {
         focus(app, tool_id);
@@ -114,11 +246,32 @@ fn build(app: &AppHandle, tool_id: &str) -> Result<(), String> {
             .map_err(|e| format!("{e}"))?,
     );
 
+    let (width, height, min_width, min_height) = window_metrics(&manifest.window);
+    let icon = icons::tool_icon_or_fallback(tool_id, ICON_PX);
+
+    // A tool is a normal, independent app window: the native frame provides the
+    // minimise / maximise / close buttons, drag-by-caption and resize borders.
+    // `skip_taskbar(false)` is the default, but it is stated explicitly because
+    // every tool must own a taskbar button showing its own icon.
     let win = WebviewWindowBuilder::new(app, &label, url)
         .title(&manifest.name)
-        .inner_size(manifest.window.width, manifest.window.height)
-        .min_inner_size(manifest.window.min_width, manifest.window.min_height)
-        .decorations(false)
+        .inner_size(width, height)
+        .min_inner_size(min_width, min_height)
+        .center()
+        .decorations(true)
+        .resizable(true)
+        .skip_taskbar(false)
+        // Shown only after both icon sizes are in place, otherwise the taskbar
+        // briefly shows the host icon before the tool's own one lands.
+        .visible(false)
+        // The shell UI is dark-only (`ui/*` ships one dark token set), so force a
+        // dark caption instead of following the OS app theme. Tao implements this
+        // with DwmSetWindowAttribute(DWMWA_USE_IMMERSIVE_DARK_MODE).
+        .theme(Some(tauri::Theme::Dark))
+        // `icon` becomes ICON_SMALL, i.e. the title-bar glyph. The big icon the
+        // taskbar draws is set below via `set_taskbar_icon`.
+        .icon(icon.to_tauri_image())
+        .map_err(|e| format!("工具窗口图标不可用：{e}"))?
         .data_directory(webview_dir)
         .disable_drag_drop_handler() // HTML5 drop must reach the page
         .initialization_script(&crate::bridge::shim_script(
@@ -132,6 +285,10 @@ fn build(app: &AppHandle, tool_id: &str) -> Result<(), String> {
         .build()
         .map_err(|e| e.to_string())?;
 
+    #[cfg(windows)]
+    set_taskbar_icon(&win, tool_id);
+
+    let _ = win.show();
     let _ = win.set_focus();
 
     // Runtime actions (`toolbox.actions.register`) only live while this window does.
@@ -141,6 +298,8 @@ fn build(app: &AppHandle, tool_id: &str) -> Result<(), String> {
         if matches!(event, tauri::WindowEvent::Destroyed) {
             crate::actions::clear_runtime(&tool_id_ev);
             mark_not_ready(&label_ev);
+            #[cfg(windows)]
+            release_taskbar_icon(&label_ev);
             crate::actions::apply_hotkeys(&crate::app_handle());
         }
     });
@@ -400,4 +559,42 @@ pub fn open_files(app: &AppHandle, tool_id: &str, files: Vec<String>) {    let l
             q.retain(|(l, _)| l != &label2);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn window(width: f64, height: f64, min_width: f64, min_height: f64) -> registry::WindowSpec {
+        registry::WindowSpec {
+            width,
+            height,
+            min_width,
+            min_height,
+        }
+    }
+
+    #[test]
+    fn window_metrics_keep_the_manifest_size_and_minimum() {
+        let metrics = window_metrics(&window(1360.0, 860.0, 960.0, 620.0));
+        assert_eq!(metrics, (1360.0, 860.0, 960.0, 620.0));
+    }
+
+    #[test]
+    fn window_metrics_fall_back_for_unusable_sizes() {
+        let metrics = window_metrics(&window(0.0, -4.0, f64::NAN, -1.0));
+        assert_eq!(metrics.0, 1100.0, "a zero width would hide the window");
+        assert_eq!(metrics.1, 760.0, "a negative height would hide the window");
+        assert_eq!(
+            (metrics.2, metrics.3),
+            (0.0, 0.0),
+            "an unusable minimum means no constraint"
+        );
+    }
+
+    #[test]
+    fn window_metrics_never_require_more_than_the_initial_size() {
+        let (_, _, min_width, min_height) = window_metrics(&window(800.0, 600.0, 1200.0, 900.0));
+        assert_eq!((min_width, min_height), (800.0, 600.0));
+    }
 }
