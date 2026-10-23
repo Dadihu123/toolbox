@@ -298,9 +298,49 @@ pub fn save_config(window: WebviewWindow, patch: Value) -> Result<Value, String>
         }
         if let Some(v) = obj.get("ballSide").and_then(|v| v.as_str()) {
             cfg.ball_side = v.to_string();
+            // Choosing a side in the settings page docks the ball again.
+            cfg.ball_docked = true;
         }
         if let Some(v) = obj.get("ballY").and_then(|v| v.as_f64()) {
             cfg.ball_y = v.clamp(0.0, 1.0);
+        }
+        if let Some(v) = obj.get("ballX").and_then(|v| v.as_f64()) {
+            cfg.ball_x = v.clamp(0.0, 1.0);
+            cfg.ball_docked = false;
+        }
+        if let Some(v) = obj.get("ballDocked").and_then(|v| v.as_bool()) {
+            cfg.ball_docked = v;
+        }
+        if let Some(qm) = obj.get("quickMenu") {
+            let ids = |value: Option<&Value>| -> Option<Vec<String>> {
+                Some(
+                    value?
+                        .as_array()?
+                        .iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.trim().to_string())
+                        .collect(),
+                )
+            };
+            if let Some(v) = qm.get("enabled").and_then(|v| v.as_bool()) {
+                cfg.quick_menu.enabled = v;
+            }
+            if let Some(v) = qm.get("count").and_then(|v| v.as_u64()) {
+                cfg.quick_menu.count = v as usize;
+            }
+            if let Some(v) = qm.get("rings").and_then(|v| v.as_u64()) {
+                cfg.quick_menu.rings = v as usize;
+            }
+            if let Some(v) = ids(qm.get("left")) {
+                cfg.quick_menu.left = v;
+            }
+            if let Some(v) = ids(qm.get("right")) {
+                cfg.quick_menu.right = v;
+            }
+            if let Some(v) = ids(qm.get("center")) {
+                cfg.quick_menu.center = v;
+            }
+            cfg.quick_menu.normalize();
         }
         if let Some(v) = obj.get("ballMode").and_then(|v| v.as_str()) {
             cfg.ball_mode = v.to_string();

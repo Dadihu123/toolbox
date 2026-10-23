@@ -26,6 +26,15 @@ const MOCK = {
     theme: 'dark',
     ballSide: 'right',
     ballY: 0.62,
+    ballDocked: true,
+    quickMenu: {
+      enabled: true,
+      count: 5,
+      rings: 2,
+      left: [],
+      right: [],
+      center: []
+    },
     panelHotkey: 'Alt+Space',
     autostart: false,
     closeToTray: true
@@ -95,6 +104,70 @@ const MOCK = {
       actions: [
         { id: 'gif-split.open', title: '打开拆帧面板', combo: 'Ctrl+Alt+G' }
       ]
+    },
+    {
+      id: 'clipboard-history',
+      name: '剪贴板历史',
+      description: '保留最近 100 条复制内容，支持搜索、收藏与一键回填；退出后自动清空。',
+      version: '1.4.2',
+      author: '社区 · 顾川',
+      source: 'installed',
+      enabled: true,
+      accent: '#f0758a',
+      iconDataUrl: null,
+      dir: 'D:\\Toolbox\\data\\tools\\clipboard-history',
+      sizeBytes: 512000,
+      actions: [
+        { id: 'clipboard-history.open', title: '打开剪贴板历史', combo: '' }
+      ]
+    },
+    {
+      id: 'screen-snap',
+      name: '截图标注',
+      description: '框选屏幕区域并添加箭头、马赛克与文字标注，截图可直接复制到剪贴板。',
+      version: '2.0.1',
+      author: 'Toolbox 官方',
+      source: 'official',
+      enabled: true,
+      accent: '#5ad1c8',
+      iconDataUrl: null,
+      dir: 'D:\\Toolbox\\tools\\screen-snap',
+      sizeBytes: 1204224,
+      actions: [
+        { id: 'screen-snap.capture', title: '开始截图标注', combo: 'Ctrl+Alt+S' }
+      ]
+    },
+    {
+      id: 'window-pin',
+      name: '窗口置顶',
+      description: '把任意窗口固定在其它窗口之上，支持鼠标点击拾取与快捷键切换。',
+      version: '0.8.0',
+      author: '社区 · 白泽',
+      source: 'installed',
+      enabled: true,
+      accent: '#9b8cff',
+      iconDataUrl: null,
+      dir: 'D:\\Toolbox\\data\\tools\\window-pin',
+      sizeBytes: 264192,
+      actions: [
+        { id: 'window-pin.toggle', title: '切换当前窗口置顶', combo: '' }
+      ]
+    },
+    {
+      id: 'file-hash',
+      name: '文件校验',
+      description: '计算文件的 MD5 / SHA-1 / SHA-256 校验值，可批量比对下载文件是否完整。',
+      version: '1.0.3',
+      author: '社区 · 林深',
+      source: 'installed',
+      enabled: true,
+      accent: '#d4a15a',
+      iconDataUrl: null,
+      dir: 'D:\\Toolbox\\data\\tools\\file-hash',
+      sizeBytes: 368640,
+      actions: [
+        { id: 'file-hash.open', title: '打开文件校验', combo: '' }
+      ]
     }
   ],
   actions: [
@@ -106,7 +179,11 @@ const MOCK = {
     { id: 'sprite-align.export', scope: 'tool', toolId: 'sprite-align', title: '导出当前对齐', combo: 'Ctrl+Alt+E', defaultCombo: 'Ctrl+Alt+E', effective: true, reason: null },
     { id: 'batch-rename.run', scope: 'tool', toolId: 'batch-rename', title: '执行上次重命名规则', combo: 'Ctrl+Alt+R', defaultCombo: 'Ctrl+Alt+R', effective: true, reason: null },
     { id: 'color-picker.pick', scope: 'tool', toolId: 'color-picker', title: '开始屏幕取色', combo: '', defaultCombo: 'Ctrl+Shift+C', effective: false, reason: '未设置' },
-    { id: 'gif-split.open', scope: 'tool', toolId: 'gif-split', title: '打开拆帧面板', combo: 'Ctrl+Alt+G', defaultCombo: 'Ctrl+Alt+G', effective: false, reason: '被其它程序占用' }
+    { id: 'gif-split.open', scope: 'tool', toolId: 'gif-split', title: '打开拆帧面板', combo: 'Ctrl+Alt+G', defaultCombo: 'Ctrl+Alt+G', effective: false, reason: '被其它程序占用' },
+    { id: 'clipboard-history.open', scope: 'tool', toolId: 'clipboard-history', title: '打开剪贴板历史', combo: '', defaultCombo: 'Ctrl+Alt+V', effective: false, reason: '未设置' },
+    { id: 'screen-snap.capture', scope: 'tool', toolId: 'screen-snap', title: '开始截图标注', combo: 'Ctrl+Alt+S', defaultCombo: 'Ctrl+Alt+S', effective: true, reason: null },
+    { id: 'window-pin.toggle', scope: 'tool', toolId: 'window-pin', title: '切换当前窗口置顶', combo: '', defaultCombo: 'Ctrl+Alt+P', effective: false, reason: '未设置' },
+    { id: 'file-hash.open', scope: 'tool', toolId: 'file-hash', title: '打开文件校验', combo: '', defaultCombo: 'Ctrl+Alt+H', effective: false, reason: '未设置' }
   ],
   hotkeys: {}
 };
