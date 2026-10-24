@@ -1,0 +1,298 @@
+{
+  "title": "工具箱 · Toolbox",
+  "brand": {
+    "sub": "Toolbox"
+  },
+  "nav": {
+    "aria": "主导航",
+    "tools": "工具",
+    "hotkeys": "快捷键",
+    "settings": "设置",
+    "about": "关于"
+  },
+  "shell": {
+    "titlebarSub": "工具箱",
+    "loading": "正在加载工具箱…",
+    "loadingBadge": "加载中",
+    "portable": "便携模式",
+    "nonPortable": "非便携",
+    "portableTitle": "配置与数据保存在程序目录",
+    "nonPortableTitle": "数据保存在系统用户目录",
+    "minimize": "最小化"
+  },
+  "error": {
+    "title": "加载失败",
+    "body": "无法读取工具箱状态，请重试或检查宿主是否正在运行。",
+    "reload": "重新加载",
+    "hostNotReady": "宿主尚未就绪"
+  },
+  "source": {
+    "official": "官方",
+    "installed": "第三方",
+    "dev": "开发中",
+    "unknown": "未知"
+  },
+  "tools": {
+    "title": "工具",
+    "subtitle": "管理已安装的工具，或从本地 zip 安装新的第三方工具。",
+    "installed": "已安装",
+    "enabledCount": "{{count}} 个已启用",
+    "emptyTitle": "还没有安装工具",
+    "emptyBody": "从下方「工具市场」安装官方或第三方工具。",
+    "noActions": "暂无动作",
+    "manifestError": "清单异常",
+    "enableFirst": "请先启用该工具",
+    "more": "更多操作",
+    "state": {
+      "on": "已启用",
+      "off": "已停用",
+      "missing": "未安装"
+    },
+    "permissions": {
+      "count": "{{count}} 项权限",
+      "title": "安装时由你逐项授权的权限数量"
+    },
+    "menu": {
+      "reveal": "打开所在目录",
+      "enable": "启用",
+      "disable": "禁用",
+      "uninstall": "卸载"
+    }
+  },
+  "market": {
+    "title": "工具市场",
+    "introTitle": "扩展你的工具箱",
+    "introBody": "官方工具随工具箱分发（{{dir}} 目录），第三方工具从本地 zip 安装。安装前请确认来源可信。",
+    "installed": "已安装",
+    "install": "安装",
+    "noOfficial": "暂无官方工具",
+    "officialDir": "官方工具目录"
+  },
+  "install": {
+    "pick": "从 zip 安装第三方工具…",
+    "pickHint": "选择本地 .zip 工具包，安装完成后会出现在「已安装」列表",
+    "installing": "正在安装…",
+    "checking": "正在检查安装包…",
+    "unknownTool": "未知工具",
+    "unknownAuthor": "未知作者",
+    "review": {
+      "noPermissions": "该工具未申请任何额外权限",
+      "upgrade": "「{{name}}」已安装，继续将覆盖当前版本，旧版本会自动备份到 data/backups/tools/。",
+      "domains": "可访问域名：{{domains}}",
+      "domainsSeparator": "、",
+      "title": "安装「{{name}}」",
+      "idTitle": "工具 id",
+      "noDescription": "该工具未提供描述。",
+      "files": "{{count}} 个文件",
+      "unpacked": "解压后 {{size}}",
+      "permissions": "权限授权",
+      "declared": "已声明 {{count}} 项，可取消勾选",
+      "noneDeclared": "无额外权限",
+      "note": "只有勾选的权限会被授予该工具，未勾选的权限在运行时会被桥接层直接拒绝。请只安装来自可信来源的工具。"
+    }
+  },
+  "hotkeys": {
+    "subtitle": "点击组合键开始录制。全局快捷键在所有工具窗口中共享。",
+    "count": "{{count}} 项快捷键",
+    "appScope": "应用级",
+    "emptyTitle": "暂无应用快捷键",
+    "emptyBody": "工具箱启动后会自动注册默认快捷键。",
+    "note": "全局快捷键在前台为管理员权限窗口或全屏独占游戏时可能不生效。若提示冲突，请换一个组合键，或关闭占用该组合键的程序。",
+    "column": {
+      "action": "功能",
+      "shortcut": "快捷键",
+      "status": "状态"
+    },
+    "status": {
+      "ok": "生效",
+      "conflict": "冲突",
+      "taken": "被其它程序占用"
+    },
+    "record": {
+      "prompt": "按下组合键…",
+      "hint": "Esc 取消 · Enter 确认",
+      "startTitle": "点击录制新的快捷键",
+      "cancelTitle": "按 Esc 取消，Enter 确认"
+    },
+    "reset": "重置"
+  },
+  "quickMenu": {
+    "title": "悬停快捷图标",
+    "subtitle": "鼠标悬停圆球时展开的快捷图标：贴边时沿屏幕边缘扇形展开，自由浮动时环绕圆球展开。",
+    "enable": "启用悬停快捷图标",
+    "enableHint": "鼠标停在悬浮圆球上时，常用工具沿屏幕边缘展开",
+    "countTitle": "图标数量",
+    "countHint": "每个方向最多展开的图标个数",
+    "countValue": "{{count}} 个",
+    "ringsTitle": "排列层数",
+    "ringsHint": "两层时图标分成内外两圈，适合图标较多的情况",
+    "rings1": "1 层",
+    "rings2": "2 层",
+    "demoTitle": "悬停预览",
+    "zoneAria": "预览圆球停靠位置",
+    "ballAria": "悬停展开快捷图标；按住拖动试试（拖动时图标隐藏）",
+    "ballHint": "悬停 / 拖动",
+    "ballFoot": "悬停圆球展开图标；指针移到图标上不会收起；拖动时图标不出现。",
+    "dragging": "拖动中",
+    "draggingHint": "松开后自动停靠，图标保持隐藏",
+    "assign": "图标分配",
+    "assignHint": "按顺序对应扇出位置；未指定的位置按已启用工具顺序自动填充（当前 {{count}} 个已启用）",
+    "off": "已关闭",
+    "stat": "{{icons}} 个图标 · {{rings}} 层",
+    "offOverlay": "悬停快捷图标已关闭",
+    "zone": {
+      "left": "屏幕左边缘",
+      "leftDir": "贴左边缘 · 向右展开",
+      "right": "屏幕右边缘",
+      "rightDir": "贴右边缘 · 向左展开",
+      "center": "自由浮动",
+      "centerDir": "不贴边 · 环绕展开"
+    },
+    "slot": {
+      "change": "点击更换工具",
+      "clear": "清除该位置（回退为自动）",
+      "clearAria": "清除该位置",
+      "pick": "选择工具；不选择时按已启用工具顺序自动填充",
+      "unassigned": "未指定",
+      "auto": "自动"
+    },
+    "picker": {
+      "position": "第 {{index}} 个位置",
+      "auto": "自动（按已启用工具顺序填充）",
+      "empty": "还没有已启用的工具",
+      "foot": "未指定的位置会按已启用工具顺序自动填充"
+    }
+  },
+  "settings": {
+    "subtitle": "调整工具箱的外观、悬停快捷图标、启动方式与数据位置。",
+    "hostConnected": "已连接宿主",
+    "preview": "浏览器预览",
+    "appearance": {
+      "title": "外观",
+      "subtitle": "界面配色与悬浮圆球的位置。"
+    },
+    "theme": {
+      "title": "主题",
+      "aria": "主题",
+      "hint": "浅色与深色共用一套设计令牌",
+      "system": "跟随系统",
+      "light": "浅色",
+      "dark": "深色",
+      "locked": "已锁定为{{name}}",
+      "following": "跟随 Windows（当前：{{name}}）"
+    },
+    "language": {
+      "title": "语言",
+      "aria": "语言",
+      "hint": "界面文字使用的语言",
+      "system": "跟随系统",
+      "zh": "简体中文",
+      "en": "English",
+      "locked": "已锁定为 {{name}}",
+      "following": "跟随 Windows（当前：{{name}}）"
+    },
+    "ballDock": {
+      "title": "圆球停靠",
+      "hint": "悬浮圆球在屏幕边缘的位置",
+      "right": "右侧",
+      "left": "左侧"
+    },
+    "ballY": {
+      "title": "圆球纵向位置",
+      "hint": "0% 为屏幕顶部，100% 为底部"
+    },
+    "startup": {
+      "title": "启动",
+      "subtitle": "控制工具箱随系统启动以及与托盘的交互。",
+      "autostart": "开机自启",
+      "autostartHint": "登录 Windows 后自动启动工具箱",
+      "tray": "关闭主窗口时最小化到托盘",
+      "trayHint": "关闭窗口后继续在后台运行"
+    },
+    "data": {
+      "title": "数据",
+      "subtitle": "配置与工具数据的位置。便携模式下所有内容都在程序目录。",
+      "dir": "数据目录",
+      "dirHint": "配置、日志与第三方工具都保存在这里",
+      "copyPath": "复制路径",
+      "portableTitle": "便携模式",
+      "portableHint": "删除 data/ 目录即可完全重置",
+      "portableOn": "已启用 · 便携模式",
+      "portableOff": "未启用 · 非便携",
+      "maintenance": "维护",
+      "maintenanceHint": "查看运行日志或导出当前配置",
+      "logs": "打开日志目录",
+      "export": "导出配置",
+      "soon": "即将支持"
+    },
+    "danger": {
+      "title": "危险区",
+      "subtitle": "这些操作会影响工具箱的运行状态，请谨慎使用。",
+      "restart": "重启工具箱",
+      "quit": "退出"
+    },
+    "foot": "设置修改后立即写入配置文件；部分外观选项会在后续版本开放。"
+  },
+  "about": {
+    "desc": "一个轻量的桌面工具集合。把常用的图像、文件与系统小工具集中在一个窗口里，通过悬浮圆球和全局快捷键随时呼出，让工具触手可及。",
+    "tech": "基于 {{stack}} 构建",
+    "portableNote": "当前为便携模式：配置、日志与第三方工具全部保存在程序目录，不会写入系统用户目录。",
+    "nonPortableNote": "当前为非便携模式：配置与数据保存在系统用户目录，卸载前请先备份。",
+    "runtime": "运行方式",
+    "runtimeHost": "Tauri 桌面宿主",
+    "runtimePreview": "浏览器预览（Mock）",
+    "foot": "数据完全保存在程序目录，删除 data/ 即完全重置。"
+  },
+  "modal": {
+    "confirm": "确定",
+    "uninstallTitle": "卸载「{{name}}」",
+    "uninstallMessage": "工具目录将被删除，已保存的工具数据不会保留。此操作不可撤销。"
+  },
+  "toast": {
+    "refreshed": "已刷新",
+    "loadFailed": "加载失败，请稍后重试",
+    "saved": "已保存",
+    "saveFailed": "保存失败",
+    "saveFailedWith": "保存失败：{{error}}",
+    "opened": "已打开「{{name}}」",
+    "openFailed": "打开失败",
+    "openFailedWith": "打开失败：{{error}}",
+    "toolClosed": "已关闭「{{name}}」",
+    "closeFailed": "关闭失败",
+    "toolEnabled": "已启用「{{name}}」",
+    "toolDisabled": "已禁用「{{name}}」",
+    "actionFailed": "操作失败",
+    "actionFailedWith": "操作失败：{{error}}",
+    "uninstalled": "已卸载「{{name}}」",
+    "uninstallFailed": "卸载失败",
+    "uninstallFailedWith": "卸载失败：{{error}}",
+    "revealOk": "已打开目录",
+    "revealFailed": "无法打开目录：{{error}}",
+    "copyEmpty": "路径为空，无法复制",
+    "copyOk": "路径已复制",
+    "copyFailed": "复制失败，请手动选择路径",
+    "hotkeyNeedKey": "请先按下一个非修饰键",
+    "hotkeyFailed": "快捷键设置失败",
+    "hotkeyUpdated": "快捷键已更新",
+    "hotkeyReset": "已恢复默认快捷键",
+    "resetFailed": "重置失败",
+    "resetFailedWith": "重置失败：{{error}}",
+    "installCancelled": "已取消安装",
+    "installCancelledClean": "已取消安装，未做任何更改",
+    "installOk": "安装成功：{{name}}",
+    "installFailed": "安装失败",
+    "installFailedWith": "安装失败：{{error}}",
+    "restarting": "正在重启工具箱…",
+    "restartPreview": "浏览器预览：已模拟重启",
+    "restartFailed": "重启失败",
+    "quitted": "工具箱已退出",
+    "quitPreview": "浏览器预览：已模拟退出",
+    "quitFailed": "退出失败",
+    "minimizePreview": "浏览器预览：已模拟最小化",
+    "minimizeUnavailable": "当前宿主未提供最小化命令",
+    "minimizeFailed": "最小化失败",
+    "closePreview": "浏览器预览：已模拟关闭窗口",
+    "slotFull": "已启用工具不足，无法占用这个位置",
+    "bootFailed": "工具箱启动失败"
+  }
+}

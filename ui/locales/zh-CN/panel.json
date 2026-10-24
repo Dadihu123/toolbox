@@ -1,0 +1,23 @@
+{
+  "title": "工具箱面板",
+  "search": {
+    "placeholder": "搜索工具或功能…"
+  },
+  "group": {
+    "results": "搜索结果 · {{count}}",
+    "all": "全部工具"
+  },
+  "row": {
+    "action": "功能 · {{tool}}"
+  },
+  "badge": {
+    "installed": "第三方"
+  },
+  "empty": {
+    "noMatch": "没有匹配的工具或功能",
+    "noTools": "还没有可用工具"
+  },
+  "error": {
+    "load": "加载失败：{{error}}"
+  }
+}

@@ -1,0 +1,298 @@
+{
+  "title": "Toolbox",
+  "brand": {
+    "sub": "Desktop tools"
+  },
+  "nav": {
+    "aria": "Main navigation",
+    "tools": "Tools",
+    "hotkeys": "Hotkeys",
+    "settings": "Settings",
+    "about": "About"
+  },
+  "shell": {
+    "titlebarSub": "Desktop tools",
+    "loading": "Loading Toolbox…",
+    "loadingBadge": "Loading",
+    "portable": "Portable",
+    "nonPortable": "Not portable",
+    "portableTitle": "Configuration and data live in the program folder",
+    "nonPortableTitle": "Data lives in the system user folder",
+    "minimize": "Minimize"
+  },
+  "error": {
+    "title": "Could not load",
+    "body": "Could not read the Toolbox state. Try again, or check that the host is running.",
+    "reload": "Reload",
+    "hostNotReady": "Host not ready"
+  },
+  "source": {
+    "official": "Official",
+    "installed": "Third-party",
+    "dev": "In development",
+    "unknown": "Unknown"
+  },
+  "tools": {
+    "title": "Tools",
+    "subtitle": "Manage installed tools, or install a new third-party tool from a local zip.",
+    "installed": "Installed",
+    "enabledCount": "{{count}} enabled",
+    "emptyTitle": "No tools installed yet",
+    "emptyBody": "Install an official or third-party tool from the tool market below.",
+    "noActions": "No actions",
+    "manifestError": "Bad manifest",
+    "enableFirst": "Enable this tool first",
+    "more": "More actions",
+    "state": {
+      "on": "Enabled",
+      "off": "Disabled",
+      "missing": "Not installed"
+    },
+    "permissions": {
+      "count": "{{count}} permissions",
+      "title": "Number of permissions you granted one by one during install"
+    },
+    "menu": {
+      "reveal": "Open containing folder",
+      "enable": "Enable",
+      "disable": "Disable",
+      "uninstall": "Uninstall"
+    }
+  },
+  "market": {
+    "title": "Tool market",
+    "introTitle": "Extend your toolbox",
+    "introBody": "Official tools ship with Toolbox (in {{dir}}); third-party tools are installed from a local zip. Check that the source is trustworthy before installing.",
+    "installed": "Installed",
+    "install": "Install",
+    "noOfficial": "No official tools yet",
+    "officialDir": "Official tools folder"
+  },
+  "install": {
+    "pick": "Install a third-party tool from zip…",
+    "pickHint": "Pick a local .zip package; it shows up under Installed when done",
+    "installing": "Installing…",
+    "checking": "Checking the package…",
+    "unknownTool": "Unknown tool",
+    "unknownAuthor": "Unknown author",
+    "review": {
+      "noPermissions": "This tool requests no extra permissions",
+      "upgrade": "“{{name}}” is already installed. Continuing overwrites the current version; the old one is backed up to data/backups/tools/.",
+      "domains": "Reachable domains: {{domains}}",
+      "domainsSeparator": ", ",
+      "title": "Install “{{name}}”",
+      "idTitle": "Tool id",
+      "noDescription": "This tool has no description.",
+      "files": "{{count}} files",
+      "unpacked": "{{size}} unpacked",
+      "permissions": "Permissions",
+      "declared": "{{count}} declared, untick any",
+      "noneDeclared": "No extra permissions",
+      "note": "Only ticked permissions are granted to the tool; unticked ones are refused by the bridge at runtime. Install tools from trusted sources only."
+    }
+  },
+  "hotkeys": {
+    "subtitle": "Click a key combination to record it. Global shortcuts are shared by every tool window.",
+    "count": "{{count}} shortcuts",
+    "appScope": "App-wide",
+    "emptyTitle": "No app shortcuts yet",
+    "emptyBody": "Toolbox registers the default shortcuts when it starts.",
+    "note": "Global shortcuts may not fire while an elevated window or an exclusive full-screen game is in the foreground. If a conflict is reported, pick another combination or close the program that holds it.",
+    "column": {
+      "action": "Action",
+      "shortcut": "Shortcut",
+      "status": "Status"
+    },
+    "status": {
+      "ok": "Active",
+      "conflict": "Conflict",
+      "taken": "Taken by another program"
+    },
+    "record": {
+      "prompt": "Press a combination…",
+      "hint": "Esc cancels · Enter confirms",
+      "startTitle": "Click to record a new shortcut",
+      "cancelTitle": "Esc to cancel, Enter to confirm"
+    },
+    "reset": "Reset"
+  },
+  "quickMenu": {
+    "title": "Hover quick menu",
+    "subtitle": "Quick icons that fan out when you hover the ball: along the screen edge when docked, around the ball when it floats.",
+    "enable": "Enable hover quick menu",
+    "enableHint": "Hover the floating ball to fan your frequent tools out along the screen edge",
+    "countTitle": "Icon count",
+    "countHint": "Maximum icons fanned out per direction",
+    "countValue": "{{count}}",
+    "ringsTitle": "Rings",
+    "ringsHint": "With two rings the icons split into an inner and an outer circle, which suits a larger icon count",
+    "rings1": "1 ring",
+    "rings2": "2 rings",
+    "demoTitle": "Hover preview",
+    "zoneAria": "Preview ball dock position",
+    "ballAria": "Hover to fan out the quick icons; drag to move it (the icons hide while dragging)",
+    "ballHint": "Hover/drag",
+    "ballFoot": "Hover the ball to fan the icons out; moving onto an icon keeps them open; dragging hides them.",
+    "dragging": "Dragging",
+    "draggingHint": "Release to dock, the icons stay hidden",
+    "assign": "Icon assignment",
+    "assignHint": "Positions map to the fan slots in order; unassigned slots fill automatically with enabled tools ({{count}} enabled now)",
+    "off": "Off",
+    "stat": "{{icons}} icons · {{rings}} layers",
+    "offOverlay": "Hover quick menu is off",
+    "zone": {
+      "left": "Left screen edge",
+      "leftDir": "Docked left · fans right",
+      "right": "Right screen edge",
+      "rightDir": "Docked right · fans left",
+      "center": "Free floating",
+      "centerDir": "Not docked · fans around"
+    },
+    "slot": {
+      "change": "Click to change the tool",
+      "clear": "Clear this position (falls back to auto)",
+      "clearAria": "Clear this position",
+      "pick": "Pick a tool; empty positions fill automatically in enabled-tool order",
+      "unassigned": "Not assigned",
+      "auto": "Auto"
+    },
+    "picker": {
+      "position": "position {{index}}",
+      "auto": "Auto (enabled tools in order)",
+      "empty": "No enabled tools yet",
+      "foot": "Unassigned positions fill automatically"
+    }
+  },
+  "settings": {
+    "subtitle": "Adjust how Toolbox looks, the hover quick menu, startup behaviour and where data lives.",
+    "hostConnected": "Host connected",
+    "preview": "Browser preview",
+    "appearance": {
+      "title": "Appearance",
+      "subtitle": "Interface colours and where the floating ball sits."
+    },
+    "theme": {
+      "title": "Theme",
+      "aria": "Theme",
+      "hint": "Light and dark share one set of design tokens",
+      "system": "Follow system",
+      "light": "Light",
+      "dark": "Dark",
+      "locked": "Locked to {{name}}",
+      "following": "Follows Windows (now: {{name}})"
+    },
+    "language": {
+      "title": "Language",
+      "aria": "Language",
+      "hint": "The language used for interface text",
+      "system": "Follow system",
+      "zh": "Chinese (Simplified)",
+      "en": "English",
+      "locked": "Locked to {{name}}",
+      "following": "Follows Windows (now: {{name}})"
+    },
+    "ballDock": {
+      "title": "Ball docking",
+      "hint": "Where the floating ball sits on the screen edge",
+      "right": "Right",
+      "left": "Left"
+    },
+    "ballY": {
+      "title": "Ball vertical position",
+      "hint": "0% is the top of the screen, 100% the bottom"
+    },
+    "startup": {
+      "title": "Startup",
+      "subtitle": "Control whether Toolbox starts with Windows and how it uses the tray.",
+      "autostart": "Start with Windows",
+      "autostartHint": "Launch Toolbox automatically after you sign in",
+      "tray": "Minimize to tray when the main window closes",
+      "trayHint": "Keep running in the background after the window closes"
+    },
+    "data": {
+      "title": "Data",
+      "subtitle": "Where configuration and tool data live. In portable mode everything stays in the program folder.",
+      "dir": "Data folder",
+      "dirHint": "Configuration, logs and third-party tools are stored here",
+      "copyPath": "Copy path",
+      "portableTitle": "Portable mode",
+      "portableHint": "Delete the data/ folder to reset everything",
+      "portableOn": "On · portable",
+      "portableOff": "Off · not portable",
+      "maintenance": "Maintenance",
+      "maintenanceHint": "Open the runtime logs or export the current configuration",
+      "logs": "Open log folder",
+      "export": "Export configuration",
+      "soon": "Coming soon"
+    },
+    "danger": {
+      "title": "Danger zone",
+      "subtitle": "These actions affect how Toolbox runs. Use them with care.",
+      "restart": "Restart Toolbox",
+      "quit": "Quit"
+    },
+    "foot": "Changes are written to the config file immediately; some appearance options will arrive in a later version."
+  },
+  "about": {
+    "desc": "A lightweight collection of desktop tools. The image, file and system utilities you use every day live in one window, one hover of the floating ball or one global shortcut away.",
+    "tech": "Built on {{stack}}",
+    "portableNote": "Portable mode: configuration, logs and third-party tools all stay in the program folder; nothing is written to your user profile.",
+    "nonPortableNote": "Not portable: configuration and data live in your system user folder — back them up before uninstalling.",
+    "runtime": "Runs as",
+    "runtimeHost": "Tauri desktop host",
+    "runtimePreview": "Browser preview (mock)",
+    "foot": "All data lives in the program folder; deleting data/ resets everything."
+  },
+  "modal": {
+    "confirm": "OK",
+    "uninstallTitle": "Uninstall “{{name}}”",
+    "uninstallMessage": "The tool folder will be deleted, along with any data it saved. This cannot be undone."
+  },
+  "toast": {
+    "refreshed": "Refreshed",
+    "loadFailed": "Could not load, try again later",
+    "saved": "Saved",
+    "saveFailed": "Could not save",
+    "saveFailedWith": "Could not save: {{error}}",
+    "opened": "Opened “{{name}}”",
+    "openFailed": "Could not open",
+    "openFailedWith": "Could not open: {{error}}",
+    "toolClosed": "Closed “{{name}}”",
+    "closeFailed": "Could not close",
+    "toolEnabled": "Enabled “{{name}}”",
+    "toolDisabled": "Disabled “{{name}}”",
+    "actionFailed": "Action failed",
+    "actionFailedWith": "Action failed: {{error}}",
+    "uninstalled": "Uninstalled “{{name}}”",
+    "uninstallFailed": "Could not uninstall",
+    "uninstallFailedWith": "Could not uninstall: {{error}}",
+    "revealOk": "Folder opened",
+    "revealFailed": "Could not open the folder: {{error}}",
+    "copyEmpty": "Path is empty, nothing to copy",
+    "copyOk": "Path copied",
+    "copyFailed": "Could not copy, select the path manually",
+    "hotkeyNeedKey": "Press a non-modifier key first",
+    "hotkeyFailed": "Could not set the shortcut",
+    "hotkeyUpdated": "Shortcut updated",
+    "hotkeyReset": "Default shortcut restored",
+    "resetFailed": "Could not reset",
+    "resetFailedWith": "Could not reset: {{error}}",
+    "installCancelled": "Install cancelled",
+    "installCancelledClean": "Install cancelled, nothing was changed",
+    "installOk": "Installed: {{name}}",
+    "installFailed": "Install failed",
+    "installFailedWith": "Install failed: {{error}}",
+    "restarting": "Restarting Toolbox…",
+    "restartPreview": "Browser preview: restart simulated",
+    "restartFailed": "Could not restart",
+    "quitted": "Toolbox quit",
+    "quitPreview": "Browser preview: quit simulated",
+    "quitFailed": "Could not quit",
+    "minimizePreview": "Browser preview: minimize simulated",
+    "minimizeUnavailable": "This host offers no minimize command",
+    "minimizeFailed": "Could not minimize",
+    "closePreview": "Browser preview: window close simulated",
+    "slotFull": "Not enough enabled tools to fill this position",
+    "bootFailed": "Toolbox failed to start"
+  }
+}

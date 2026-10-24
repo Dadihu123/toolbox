@@ -1,0 +1,163 @@
+/*
+ * Toolbox design tokens — shared by the panel (zero-framework) and the main
+ * window. One dark set (the 0.1.0 look, unchanged) and one light set.
+ *
+ * How the theme is selected
+ * -------------------------
+ * The `data-theme` attribute on <html> is authoritative and is set before the
+ * first paint: the host injects `window.__TOOLBOX_ENV__` (see
+ * `windows::panel::host_bootstrap`) and each page applies it from a tiny inline
+ * script at the top of <head>. A runtime switch re-writes that attribute from
+ * the host `theme` event; it is never driven by `prefers-color-scheme`, because
+ * the host can pin a theme that differs from the OS.
+ *
+ * When a page is opened in a normal browser (`pnpm dev`, no Tauri), the inline
+ * script falls back to `matchMedia('(prefers-color-scheme: light)')` so the
+ * preview follows the OS. That fallback lives in the page, not here, so the CSS
+ * has exactly one source of truth per theme.
+ *
+ * Rules for adding a token: name it by role, not by colour. Anything that has to
+ * look different in the light theme belongs here — hard-coded colours inside a
+ * page are a bug waiting for the light switch.
+ */
+
+:root {
+  color-scheme: dark;
+
+  /* surfaces */
+  --bg: #14161a;
+  --bg2: #1b1e24;
+  --bg3: #22262e;
+  --line: #323844;
+  --line-soft: #272c36;
+
+  /* text */
+  --fg: #dfe3ea;
+  --fg-dim: #98a1b0;
+  --fg-faint: #6b7484;
+
+  /* accent — the same blue in both themes; --accent-text is the readable
+     variant for text on light surfaces (plain --accent is only 2.4:1 there). */
+  --accent: #4ea1ff;
+  --accent-dim: #2b6cb0;
+  --accent-text: var(--accent);
+  --accent-soft: rgba(78, 161, 255, 0.12);
+  --accent-hover: #65aeff;
+  --primary-ink: #0b111a; /* label on an --accent filled button */
+
+  /* status */
+  --ok: #3ecf8e;
+  --ok-soft: rgba(62, 207, 142, 0.12);
+  --warn: #e8b23a;
+  --warn-soft: rgba(232, 178, 58, 0.12);
+  --danger: #e5484d;
+  --danger-soft: rgba(229, 72, 77, 0.11);
+
+  /* Saturated 1px borders for "tinted" chips/banners: the `*-soft` fills are too
+     faint on their own to give the shape an edge. `-strong` is the emphasis state
+     (hover/drag/primary danger action), `-soft` is a hairline divider. */
+  --accent-line: rgba(78, 161, 255, 0.28);
+  --ok-line: rgba(62, 207, 142, 0.26);
+  --warn-line: rgba(232, 178, 58, 0.28);
+  --warn-line-strong: rgba(232, 178, 58, 0.4);
+  --danger-line: rgba(229, 72, 77, 0.3);
+  --danger-line-strong: rgba(229, 72, 77, 0.34);
+  --danger-line-soft: rgba(229, 72, 77, 0.18);
+
+  /* Dimming layers: a modal backdrop, and the lighter wash used for "disabled"
+     previews (the quick-menu demo's switched-off state). */
+  --scrim: rgba(8, 10, 14, 0.62);
+  --scrim-soft: rgba(10, 12, 16, 0.56);
+
+  /* shell chrome shared by both windows */
+  --panel-bg: rgba(20, 22, 26, 0.97);
+  --panel-foot: rgba(27, 30, 36, 0.6);  --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --panel-inset-line: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --sel-title: #ffffff;
+  --scroll-thumb: #303540;
+  --scroll-thumb-hover: #3c4350;
+  --selection: rgba(78, 161, 255, 0.28);
+  --content-glow: rgba(78, 161, 255, 0.07);
+  --hover-wash: rgba(255, 255, 255, 0.018);
+  --brand-gradient: linear-gradient(145deg, var(--accent), var(--accent-dim));
+  --brand-glow: 0 5px 16px rgba(78, 161, 255, 0.18);
+  --shadow-pop: 0 16px 40px rgba(0, 0, 0, 0.46);
+  --shadow-modal: 0 24px 60px rgba(0, 0, 0, 0.5);
+  --shadow-card-hover: 0 12px 26px rgba(0, 0, 0, 0.35);
+  --shadow-toast: 0 12px 32px rgba(0, 0, 0, 0.38);
+  --mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  /* cold neutral grey + white cards; accent hue stays #4ea1ff */
+  --bg: #f4f5f7;
+  --bg2: #ffffff;
+  --bg3: #e9ecf1;
+  --line: #d5dae2;
+  --line-soft: #e4e8ee;
+
+  --fg: #1b1f27;
+  --fg-dim: #4b5361;
+  /* #5f6877, not the #6e7787 first proposed: the lighter grey only reached
+     4.1:1 on --bg, and this token is used for body-sized text (placeholders,
+     subtitles, version, table head). 5.2:1 on --bg / 5.6:1 on --bg2. */
+  --fg-faint: #5f6877;
+
+  --accent: #4ea1ff;
+  --accent-dim: #2b6cb0;
+  --accent-text: #1f6fd0;
+  --accent-soft: rgba(43, 108, 176, 0.1);
+  --accent-hover: #3d8ef0;
+  --primary-ink: #0b111a;
+
+  --ok: #17845a;
+  --ok-soft: rgba(23, 132, 90, 0.12);
+  --warn: #94620a;
+  --warn-soft: rgba(148, 98, 10, 0.12);
+  --danger: #c62f35;
+  --danger-soft: rgba(198, 47, 53, 0.1);
+
+  --accent-line: rgba(43, 108, 176, 0.34);
+  --ok-line: rgba(23, 132, 90, 0.32);
+  --warn-line: rgba(148, 98, 10, 0.32);
+  --warn-line-strong: rgba(148, 98, 10, 0.5);
+  --danger-line: rgba(198, 47, 53, 0.32);
+  --danger-line-strong: rgba(198, 47, 53, 0.44);
+  --danger-line-soft: rgba(198, 47, 53, 0.18);
+
+  --scrim: rgba(15, 23, 42, 0.32);
+  --scrim-soft: rgba(244, 246, 250, 0.74);
+
+  --panel-bg: rgba(248, 249, 251, 0.98);
+  --panel-foot: rgba(236, 239, 244, 0.65);
+  --panel-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  --panel-inset-line: inset 0 0 0 1px rgba(15, 23, 42, 0.03);
+  --sel-title: var(--fg);
+  --scroll-thumb: #c4cbd6;
+  --scroll-thumb-hover: #aab3c1;
+  --selection: rgba(43, 108, 176, 0.18);
+  --content-glow: rgba(43, 108, 176, 0.06);
+  --hover-wash: rgba(15, 23, 42, 0.025);
+  --brand-gradient: linear-gradient(145deg, var(--accent), var(--accent-dim));
+  --brand-glow: 0 5px 16px rgba(43, 108, 176, 0.16);
+  --shadow-pop: 0 16px 40px rgba(15, 23, 42, 0.16);
+  --shadow-modal: 0 24px 60px rgba(15, 23, 42, 0.18);
+  --shadow-card-hover: 0 12px 26px rgba(15, 23, 42, 0.1);
+  --shadow-toast: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+/* --- Frosted surface ---------------------------------------------------------
+   Only when the host confirmed a working acrylic backdrop (`env.glass` in
+   `get_state`). A translucent panel without the blur would be unreadable over a
+   busy desktop, so the opaque value above stays the default. */
+:root[data-glass="on"] {
+  --panel-bg: rgba(20, 22, 26, 0.72);
+  --panel-foot: rgba(27, 30, 36, 0.55);
+}
+
+:root[data-glass="on"][data-theme="light"] {
+  --panel-bg: rgba(248, 249, 251, 0.72);
+  --panel-foot: rgba(236, 239, 244, 0.6);
+}

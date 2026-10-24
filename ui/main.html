@@ -4,47 +4,46 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>工具箱 · Toolbox</title>
+<script>
+/* Theme before the first paint. The host injects `window.__TOOLBOX_ENV__`
+   (src-tauri/src/windows/*); without it — a plain browser via `pnpm dev` —
+   follow the OS. This is the only place `prefers-color-scheme` is consulted; the
+   token block itself (./shared/theme.css) is driven exclusively by `data-theme`. */
+(function () {
+  var env = window.__TOOLBOX_ENV__;
+  var theme = env && env.theme;
+  if (theme !== "light" && theme !== "dark") {
+    theme = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+  }
+  var root = document.documentElement;
+  root.setAttribute("data-theme", theme);
+  root.style.colorScheme = theme;
+})();
+</script>
+<link rel="stylesheet" href="./shared/theme.css">
 <style>
 /* --- 1. Tokens & reset ------------------------------------------------------ */
-:root {
-  --bg: #14161a;
-  --bg2: #1b1e24;
-  --bg3: #22262e;
-  --line: #323844;
-  --line-soft: #272c36;
-  --fg: #dfe3ea;
-  --fg-dim: #98a1b0;
-  --fg-faint: #6b7484;
-  --accent: #4ea1ff;
-  --accent-dim: #2b6cb0;
-  --ok: #3ecf8e;
-  --warn: #e8b23a;
-  --danger: #e5484d;
-  --accent-soft: rgba(78, 161, 255, .12);
-  --ok-soft: rgba(62, 207, 142, .12);
-  --warn-soft: rgba(232, 178, 58, .12);
-  --danger-soft: rgba(229, 72, 77, .11);
-  --mono: "Cascadia Mono", "Consolas", "Courier New", monospace;
-}
+/* Tokens live in ./shared/theme.css (shared with the panel); dark and light
+   sets both come from there, so nothing here may hard-code a surface colour. */
 * { box-sizing: border-box; }
 html, body { height: 100%; }
 body { margin: 0; background: var(--bg); color: var(--fg); font: 13px/1.55 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif; overflow: hidden; -webkit-font-smoothing: antialiased; }
 button, input, select, textarea { font: inherit; color: inherit; }
 button { border: 0; padding: 0; background: none; }
 button:not(:disabled) { cursor: pointer; }
-a { color: var(--accent); text-decoration: none; cursor: pointer; }
+a { color: var(--accent-text); text-decoration: none; cursor: pointer; }
 code, kbd { font-family: var(--mono); }
-::selection { background: rgba(78, 161, 255, .28); }
+::selection { background: var(--selection); }
 :focus-visible { outline: 1px solid var(--accent); outline-offset: 2px; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #303540; border: 3px solid var(--bg); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: #3c4350; }
+::-webkit-scrollbar-thumb { background: var(--scroll-thumb); border: 3px solid var(--bg); border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: var(--scroll-thumb-hover); }
 /* --- 2. App shell, custom titlebar ------------------------------------------ */
 .app { height: 100vh; display: flex; flex-direction: column; min-width: 0; }
 .titlebar { height: 40px; flex: 0 0 40px; display: flex; align-items: center; justify-content: space-between; background: var(--bg2); border-bottom: 1px solid var(--line-soft); user-select: none; }
 .titlebar-brand { display: flex; align-items: center; gap: 9px; height: 100%; padding-left: 14px; }
-.titlebar-logo { display: grid; place-items: center; color: var(--accent); }
+.titlebar-logo { display: grid; place-items: center; color: var(--accent-text); }
 .titlebar-name { font-size: 12.5px; font-weight: 600; letter-spacing: .2px; }
 .titlebar-sub { margin-left: 2px; padding-left: 9px; border-left: 1px solid var(--line); color: var(--fg-faint); font-size: 11px; }
 .win-controls { display: flex; height: 100%; }
@@ -64,8 +63,8 @@ code, kbd { font-family: var(--mono); }
   place-items: center;
   border-radius: 10px;
   color: #fff;
-  background: linear-gradient(145deg, var(--accent), var(--accent-dim));
-  box-shadow: 0 5px 16px rgba(78, 161, 255, .18);
+  background: var(--brand-gradient);
+  box-shadow: var(--brand-glow);
 }
 .brand-copy { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
 .brand-copy strong { font-size: 13.5px; font-weight: 600; letter-spacing: .3px; }
@@ -81,7 +80,7 @@ code, kbd { font-family: var(--mono); }
 .side-foot { margin-top: auto; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-top: 1px solid var(--line-soft); color: var(--fg-faint); font-size: 11px; }
 .side-version { font-family: var(--mono); letter-spacing: .2px; }
 /* --- 4. Content, page headers, shared pieces -------------------------------- */
-.content { flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; background: radial-gradient(900px 460px at 78% -12%, rgba(78, 161, 255, .07), transparent 65%), var(--bg); }
+.content { flex: 1; min-width: 0; overflow-y: auto; overflow-x: hidden; background: radial-gradient(900px 460px at 78% -12%, var(--content-glow), transparent 65%), var(--bg); }
 .page { max-width: 1140px; margin: 0 auto; padding: 28px 32px 44px; min-height: 100%; }
 .page-enter { animation: page-in .18s ease-out both; }
 @keyframes page-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
@@ -118,26 +117,26 @@ code, kbd { font-family: var(--mono); }
 .btn:hover:not(:disabled) { background: var(--line-soft); border-color: var(--fg-faint); }
 .btn:active:not(:disabled) { transform: translateY(1px); }
 .btn:disabled { opacity: .42; cursor: not-allowed; }
-.btn.primary { border-color: var(--accent); background: var(--accent); color: #0b111a; font-weight: 600; }
-.btn.primary:hover:not(:disabled) { background: #65aeff; border-color: #65aeff; }
+.btn.primary { border-color: var(--accent); background: var(--accent); color: var(--primary-ink); font-weight: 600; }
+.btn.primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
 .btn.ghost { border-color: transparent; background: transparent; color: var(--fg-dim); }
 .btn.ghost:hover:not(:disabled) { background: var(--bg3); border-color: var(--line-soft); color: var(--fg); }
-.btn.danger { border-color: rgba(229, 72, 77, .34); background: var(--danger-soft); color: var(--danger); }
+.btn.danger { border-color: var(--danger-line-strong); background: var(--danger-soft); color: var(--danger); }
 .btn.danger:hover:not(:disabled) { background: var(--danger); border-color: var(--danger); color: #fff; }
 .btn.sm { height: 26px; padding: 0 9px; border-radius: 6px; font-size: 11.5px; }
 .icon-btn { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border: 1px solid transparent; border-radius: 6px; color: var(--fg-dim); transition: background .15s, border-color .15s, color .15s; }
 .icon-btn:hover { background: var(--bg3); border-color: var(--line-soft); color: var(--fg); }
-.link-btn { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-size: 11.5px; transition: color .15s; }
-.link-btn:hover { color: #7dbaff; text-decoration: underline; text-underline-offset: 2px; }
+.link-btn { display: inline-flex; align-items: center; gap: 4px; color: var(--accent-text); font-size: 11.5px; transition: color .15s; }
+.link-btn:hover { color: var(--accent-hover); text-decoration: underline; text-underline-offset: 2px; }
 .link-btn:disabled { color: var(--fg-faint); cursor: not-allowed; text-decoration: none; }
 /* Badges & pills ---------------------------------------------------------- */
 .pill, .source-badge, .badge { display: inline-flex; align-items: center; gap: 4px; height: 20px; padding: 0 7px; border: 1px solid var(--line-soft); border-radius: 5px; font-size: 10.5px; line-height: 1; white-space: nowrap; }
 .version-pill { font-family: var(--mono); color: var(--fg-faint); background: var(--bg3); border-color: var(--line-soft); }
-.source-official { color: var(--accent); background: var(--accent-soft); border-color: rgba(78, 161, 255, .28); }
+.source-official { color: var(--accent-text); background: var(--accent-soft); border-color: var(--accent-line); }
 .source-installed { color: var(--fg-dim); background: var(--bg3); border-color: var(--line-soft); }
-.source-dev { color: var(--warn); background: var(--warn-soft); border-color: rgba(232, 178, 58, .28); }
-.badge-ok { color: var(--ok); background: var(--ok-soft); border-color: rgba(62, 207, 142, .26); }
-.badge-warn { color: var(--warn); background: var(--warn-soft); border-color: rgba(232, 178, 58, .26); }
+.source-dev { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
+.badge-ok { color: var(--ok); background: var(--ok-soft); border-color: var(--ok-line); }
+.badge-warn { color: var(--warn); background: var(--warn-soft); border-color: var(--warn-line); }
 /* kbd --------------------------------------------------------------------- */
 kbd {
   display: inline-flex;
@@ -165,7 +164,13 @@ kbd {
 .tool-title { flex: 1; min-width: 0; padding-top: 1px; }
 .tool-name-row { display: flex; align-items: center; gap: 7px; min-width: 0; }
 .tool-name-row h3 { margin: 0; overflow: hidden; color: var(--fg); font-size: 14px; font-weight: 600; letter-spacing: .1px; text-overflow: ellipsis; white-space: nowrap; }
-.tool-meta { display: flex; align-items: center; gap: 7px; margin-top: 6px; min-width: 0; color: var(--fg-faint); font-size: 10.5px; }
+/* Wraps instead of squeezing: English source labels + permission counts are
+   longer than the Chinese ones, and a split "471.0 KB" reads as broken. The
+   separator sits inside the item it precedes, so a wrapped line never ends with
+   a stranded dot. */
+.tool-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 3px 7px; margin-top: 6px; min-width: 0; color: var(--fg-faint); font-size: 10.5px; }
+.tool-meta > span { white-space: nowrap; }
+.tool-meta .meta-sep::before { content: "·"; margin-right: 7px; }
 .tool-author { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tool-desc { display: -webkit-box; min-height: 39px; margin: 0; overflow: hidden; color: var(--fg-dim); font-size: 12.5px; line-height: 1.55; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .action-chips { display: flex; flex-wrap: wrap; gap: 6px; min-height: 23px; }
@@ -182,7 +187,7 @@ kbd {
 /* Market ------------------------------------------------------------------ */
 .market-card { padding: 18px; border: 1px solid var(--line-soft); border-radius: 12px; background: var(--bg2); }
 .market-intro { display: flex; align-items: flex-start; gap: 12px; }
-.market-icon { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border: 1px solid rgba(78, 161, 255, .24); border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.market-icon { width: 38px; height: 38px; flex: none; display: grid; place-items: center; border: 1px solid rgba(78, 161, 255, .24); border-radius: 10px; background: var(--accent-soft); color: var(--accent-text); }
 .market-intro h3 { margin: 0 0 3px; font-size: 13.5px; font-weight: 600; }
 .market-intro p { margin: 0; color: var(--fg-dim); font-size: 12px; }
 .market-intro code { padding: 1px 4px; border-radius: 3px; background: var(--bg3); color: var(--fg-dim); font-size: 11px; }
@@ -210,7 +215,7 @@ kbd {
 }
 .dropzone:hover:not(:disabled) { border-color: var(--accent); background: var(--accent-soft); color: var(--fg); }
 .dropzone:disabled { opacity: .55; cursor: wait; }
-.dropzone svg { color: var(--accent); margin-bottom: 2px; }
+.dropzone svg { color: var(--accent-text); margin-bottom: 2px; }
 .dropzone strong { font-size: 12.5px; font-weight: 600; }
 .dropzone span { color: var(--fg-faint); font-size: 11px; }
 .path-line { display: flex; align-items: center; gap: 8px; margin-top: 14px; min-width: 0; color: var(--fg-faint); font-size: 11px; }
@@ -234,7 +239,7 @@ kbd {
   transition: background .15s;
 }
 .hk-row:last-child { border-bottom: 0; }
-.hk-row:not(.hk-head):hover { background: rgba(255, 255, 255, .018); }
+.hk-row:not(.hk-head):hover { background: var(--hover-wash); }
 .hk-row.is-recording { background: var(--accent-soft); }
 .hk-head { min-height: 34px; padding-top: 0; padding-bottom: 0; background: var(--bg3); color: var(--fg-faint); font-size: 10.5px; letter-spacing: .4px; }
 .hk-name { overflow: hidden; color: var(--fg-dim); font-size: 12.5px; text-overflow: ellipsis; white-space: nowrap; }
@@ -245,18 +250,20 @@ kbd {
   max-width: 100%;
   padding: 0 9px;
   overflow: hidden;
-  border-color: var(--line);
+  /* `button { border: 0 }` in the reset zeroes the width, so the capsule never
+     actually had a border — only a colour that painted nothing. */
+  border: 1px solid var(--line);
   background: var(--bg3);
   color: var(--fg);
   font-size: 11px;
   text-overflow: ellipsis;
   transition: border-color .15s, background .15s, color .15s;
 }
-.kbd-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+.kbd-btn:hover { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); }
 .kbd-btn.empty { color: var(--fg-faint); border-style: dashed; }
-.kbd-btn.recording { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); animation: record-pulse 1.4s ease-in-out infinite; }
+.kbd-btn.recording { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); animation: record-pulse 1.4s ease-in-out infinite; }
 @keyframes record-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(78, 161, 255, .2); } 50% { box-shadow: 0 0 0 3px rgba(78, 161, 255, .08); } }
-.record-hint { color: var(--accent); font-size: 10px; white-space: nowrap; }
+.record-hint { color: var(--accent-text); font-size: 10px; white-space: nowrap; }
 .hk-status-wrap { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .hk-status { display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--fg-dim); font-size: 11.5px; }
 .hk-status .dot { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--fg-faint); }
@@ -296,10 +303,12 @@ kbd {
 .setting-control { display: flex; align-items: center; gap: 9px; flex: none; }
 .setting-control.wide { flex: 1; justify-content: flex-end; min-width: 0; }
 .soon { color: var(--fg-faint); font-size: 10.5px; white-space: nowrap; }
+.theme-control { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; min-width: 0; }
+.theme-hint { color: var(--fg-faint); font-size: 10.5px; white-space: nowrap; }
 .seg { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg); }
 .seg-item { height: 26px; padding: 0 10px; border-radius: 6px; color: var(--fg-dim); font-size: 11.5px; white-space: nowrap; transition: background .15s, color .15s; }
 .seg-item:hover:not(:disabled) { background: var(--bg3); color: var(--fg); }
-.seg-item.active { background: var(--accent-soft); color: var(--accent); }
+.seg-item.active { background: var(--accent-soft); color: var(--accent-text); }
 .seg-item:disabled { cursor: not-allowed; opacity: .65; }
 .switch { position: relative; width: 38px; height: 22px; flex: none; border: 1px solid var(--line); border-radius: 999px; background: var(--line-soft); transition: background .18s, border-color .18s; }
 .switch .switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--fg-faint); transition: left .18s, background .18s; }
@@ -317,8 +326,8 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .path-box code { flex: 1; min-width: 0; overflow: hidden; color: var(--fg-dim); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .path-box .btn { flex: none; }
 .data-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.danger-zone { border-color: rgba(229, 72, 77, .26); }
-.danger-zone .settings-head { border-bottom-color: rgba(229, 72, 77, .18); }
+.danger-zone { border-color: var(--danger-line); }
+.danger-zone .settings-head { border-bottom-color: var(--danger-line-soft); }
 .danger-zone .settings-head h2 { color: var(--danger); }
 .danger-actions { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px 18px; }
 .settings-foot { margin-top: 4px; color: var(--fg-faint); font-size: 11px; }
@@ -328,20 +337,21 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .qm-demo { margin: 14px 18px 0; padding: 13px; border: 1px solid var(--line-soft); border-radius: 12px; background: linear-gradient(180deg, rgba(255, 255, 255, .014), transparent 46%), var(--bg); }
 .qm-demo-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .qm-demo-title { display: inline-flex; align-items: center; gap: 6px; color: var(--fg-dim); font-size: 11.5px; font-weight: 600; letter-spacing: .2px; }
-.qm-demo-title svg { color: var(--accent); }
+.qm-demo-title svg { color: var(--accent-text); }
 .qm-zone-switch { display: inline-flex; align-items: center; gap: 2px; margin-left: auto; padding: 2px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--bg2); }
 .qm-zone-switch .seg-item { height: 22px; padding: 0 8px; border-radius: 5px; color: var(--fg-faint); font-size: 10.5px; }
 .qm-zone-switch .seg-item:hover:not(:disabled) { background: var(--bg3); color: var(--fg); }
-.qm-zone-switch .seg-item.active { background: var(--accent-soft); color: var(--accent); }
+.qm-zone-switch .seg-item.active { background: var(--accent-soft); color: var(--accent-text); }
 .qm-stage { position: relative; height: 260px; overflow: hidden; border: 1px solid var(--line-soft); border-radius: 10px; isolation: isolate; user-select: none; background: radial-gradient(360px 220px at 16% 8%, rgba(78, 161, 255, .18), transparent 62%), radial-gradient(320px 200px at 86% 94%, rgba(176, 132, 255, .14), transparent 64%), linear-gradient(155deg, #171b23 0%, #12141a 58%, #101217 100%); }
 .qm-stage::before { content: ""; position: absolute; inset: 0; z-index: 0; opacity: .5; pointer-events: none; background-image: linear-gradient(rgba(255, 255, 255, .028) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .028) 1px, transparent 1px); background-size: 34px 34px; -webkit-mask-image: radial-gradient(70% 82% at 50% 44%, #000 18%, transparent 100%); mask-image: radial-gradient(70% 82% at 50% 44%, #000 18%, transparent 100%); }
-.qm-stage.is-off::after { content: "悬停快捷图标已关闭"; position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; background: rgba(10, 12, 16, .56); color: var(--fg-faint); font-size: 12px; letter-spacing: .4px; }
+/* The caption comes from the markup: `data-off-label` is filled with the translated word-list entry. */
+.qm-stage.is-off::after { content: attr(data-off-label); position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; background: var(--scrim-soft); color: var(--fg-faint); font-size: 12px; letter-spacing: .4px; }
 .qm-desktop-bar { position: absolute; left: 0; right: 0; bottom: 0; z-index: 1; height: 20px; display: flex; align-items: center; gap: 5px; padding: 0 9px; border-top: 1px solid rgba(255, 255, 255, .05); background: rgba(9, 11, 15, .62); pointer-events: none; }
 .qm-desktop-bar i { width: 5px; height: 5px; border-radius: 50%; background: rgba(223, 227, 234, .26); }
 .qm-desktop-bar i:first-child { background: rgba(78, 161, 255, .55); }
 .qm-zone-tag { position: absolute; left: 10px; top: 9px; z-index: 4; height: 22px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--line-soft); border-radius: 6px; background: rgba(12, 15, 20, .68); color: var(--fg-faint); font-size: 10.5px; pointer-events: none; }
 .qm-zone-tag b { color: var(--fg-dim); font-weight: 600; }
-.qm-zone-tag.drag { border-color: rgba(232, 178, 58, .4); color: var(--warn); }
+.qm-zone-tag.drag { border-color: var(--warn-line-strong); color: var(--warn); }
 .qm-zone-tag.drag b { color: var(--warn); }
 .qm-ball { position: absolute; left: var(--ox, 50%); top: var(--oy, 50%); z-index: 5; width: 44px; height: 44px; margin: -22px 0 0 -22px; border: 2px solid rgba(255, 255, 255, .34); border-radius: 50%; cursor: grab; touch-action: none; background: radial-gradient(circle at 32% 26%, #8ec4ff 0%, var(--accent) 38%, #22619f 100%); box-shadow: 0 8px 20px rgba(0, 0, 0, .46), 0 0 0 5px rgba(78, 161, 255, .13); transition: transform .16s ease, box-shadow .2s ease; }
 .qm-ball::after { content: ""; position: absolute; inset: 8px; border: 1.5px solid rgba(255, 255, 255, .42); border-radius: 50%; }
@@ -371,7 +381,9 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .qm-zone { min-width: 0; padding: 10px; border: 1px solid var(--line-soft); border-radius: 10px; background: var(--bg); }
 .qm-zone-head { display: flex; align-items: center; gap: 7px; min-width: 0; margin-bottom: 8px; }
 .qm-zone-name { flex: none; font-size: 11.5px; font-weight: 600; }
-.qm-zone-dir { min-width: 0; overflow: hidden; color: var(--fg-faint); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+/* Wraps rather than ellipsizes: "Docked right · fans left" is wider than the
+   Chinese caption and clipping it loses the direction. */
+.qm-zone-dir { min-width: 0; color: var(--fg-faint); font-size: 10px; line-height: 1.35; }
 .qm-zone-count { flex: none; margin-left: auto; color: var(--fg-faint); font-family: var(--mono); font-size: 10px; }
 .qm-slots { display: flex; flex-direction: column; gap: 5px; }
 .qm-slot { display: flex; align-items: center; gap: 5px; min-width: 0; padding: 3px 4px 3px 6px; border: 1px solid var(--line-soft); border-radius: 7px; background: var(--bg2); transition: border-color .14s, background .14s; }
@@ -385,26 +397,26 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .qm-slot-ico { width: 19px; height: 19px; flex: none; display: grid; place-items: center; border-radius: 6px; font-size: 10px; font-weight: 600; }
 .qm-slot-ico img { width: 100%; height: 100%; display: block; border-radius: inherit; object-fit: cover; }
 .qm-slot-plus { border: 1px dashed var(--line); color: var(--fg-faint); }
-.qm-slot.empty:hover .qm-slot-plus { border-color: var(--accent); color: var(--accent); }
+.qm-slot.empty:hover .qm-slot-plus { border-color: var(--accent); color: var(--accent-text); }
 .qm-slot-name { min-width: 0; overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 .qm-slot.auto .qm-slot-name { color: var(--fg-faint); }
 .qm-slot-tag { flex: none; padding: 0 4px; border: 1px solid var(--line-soft); border-radius: 4px; color: var(--fg-faint); font-size: 9px; line-height: 14px; }
-.qm-slot-tag.warn { border-color: rgba(232, 178, 58, .32); background: var(--warn-soft); color: var(--warn); }
+.qm-slot-tag.warn { border-color: var(--warn-line); background: var(--warn-soft); color: var(--warn); }
 .qm-slot-clear { width: 20px; height: 20px; flex: none; display: grid; place-items: center; border-radius: 5px; color: var(--fg-faint); opacity: .75; transition: background .14s, color .14s, opacity .14s; }
 .qm-slot-clear:hover { background: var(--danger-soft); color: var(--danger); opacity: 1; }
 .qm-slot-clear:disabled { opacity: .3; cursor: not-allowed; }
-.qm-picker { position: fixed; z-index: 910; width: 246px; max-height: 324px; overflow-y: auto; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg3); box-shadow: 0 16px 40px rgba(0, 0, 0, .46); animation: menu-in .12s ease-out both; }
+.qm-picker { position: fixed; z-index: 910; width: 246px; max-height: 324px; overflow-y: auto; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg3); box-shadow: var(--shadow-pop); animation: menu-in .12s ease-out both; }
 .qm-picker-head { padding: 6px 8px 7px; border-bottom: 1px solid var(--line-soft); color: var(--fg-faint); font-size: 10.5px; }
 .qm-picker-head b { color: var(--fg-dim); font-weight: 600; }
 .qm-picker-list { display: flex; flex-direction: column; gap: 1px; padding-top: 3px; }
 .qm-pick { width: 100%; display: flex; align-items: center; gap: 8px; padding: 5px 7px; border-radius: 6px; color: var(--fg-dim); font-size: 11.5px; text-align: left; transition: background .12s, color .12s; }
 .qm-pick:hover { background: var(--line-soft); color: var(--fg); }
-.qm-pick.active { background: var(--accent-soft); color: var(--accent); }
+.qm-pick.active { background: var(--accent-soft); color: var(--accent-text); }
 .qm-pick-ico { width: 22px; height: 22px; flex: none; display: grid; place-items: center; border-radius: 6px; font-size: 10.5px; font-weight: 600; }
 .qm-pick-ico img { width: 100%; height: 100%; display: block; border-radius: inherit; object-fit: cover; }
 .qm-pick-auto { border: 1px dashed var(--line); color: var(--fg-faint); }
 .qm-pick-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.qm-pick-check { flex: none; display: grid; place-items: center; color: var(--accent); }
+.qm-pick-check { flex: none; display: grid; place-items: center; color: var(--accent-text); }
 .qm-pick-foot { padding: 4px 8px 6px; color: var(--fg-faint); font-size: 10px; }
 @media (max-width: 960px) {
   .qm-zones { grid-template-columns: 1fr; }
@@ -430,7 +442,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   margin: 0 auto 16px;
   display: grid;
   place-items: center;
-  border: 1px solid rgba(78, 161, 255, .28);
+  border: 1px solid var(--accent-line);
   border-radius: 20px;
   color: #fff;
   background: linear-gradient(145deg, var(--accent), var(--accent-dim));
@@ -457,7 +469,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   line-height: 1.65;
   text-align: left;
 }
-.about-note svg { flex: none; margin-top: 1px; color: var(--accent); }
+.about-note svg { flex: none; margin-top: 1px; color: var(--accent-text); }
 .about-foot { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line-soft); color: var(--fg-faint); font-size: 10.5px; }
 .about-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; text-align: left; }
 .about-meta div { padding: 9px 11px; border: 1px solid var(--line-soft); border-radius: 8px; background: var(--bg); }
@@ -472,7 +484,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .spinner { width: 26px; height: 26px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .error-state { text-align: center; }
-.error-state .empty-ico { color: var(--danger); border-color: rgba(229, 72, 77, .3); background: var(--danger-soft); }
+.error-state .empty-ico { color: var(--danger); border-color: var(--danger-line); background: var(--danger-soft); }
 .error-state h2 { margin: 0; color: var(--fg); font-size: 15px; }
 .error-state p { max-width: 460px; margin: 0; color: var(--fg-dim); font-size: 12px; }
 .error-state code { max-width: 560px; overflow-wrap: anywhere; color: var(--fg-faint); font-size: 11px; }
@@ -486,7 +498,7 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   border-left: 3px solid var(--accent);
   border-radius: 8px;
   background: var(--bg3);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, .38);
+  box-shadow: var(--shadow-toast);
   color: var(--fg);
   font-size: 12px;
   line-height: 1.45;
@@ -497,14 +509,14 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .toast.warn { border-left-color: var(--warn); }
 .toast.danger { border-left-color: var(--danger); }
 .toast.info { border-left-color: var(--accent); }
-.toast-ico { flex: none; margin-top: 1px; color: var(--accent); }
+.toast-ico { flex: none; margin-top: 1px; color: var(--accent-text); }
 .toast.ok .toast-ico { color: var(--ok); }
 .toast.warn .toast-ico { color: var(--warn); }
 .toast.danger .toast-ico { color: var(--danger); }
 .toast.out { animation: toast-out .2s ease-in both; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes toast-out { to { opacity: 0; transform: translateY(6px) scale(.98); } }
-.ctx-menu { position: fixed; z-index: 900; min-width: 182px; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg3); box-shadow: 0 16px 40px rgba(0, 0, 0, .46); animation: menu-in .12s ease-out both; }
+.ctx-menu { position: fixed; z-index: 900; min-width: 182px; padding: 4px; border: 1px solid var(--line); border-radius: 9px; background: var(--bg3); box-shadow: var(--shadow-pop); animation: menu-in .12s ease-out both; }
 @keyframes menu-in { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 .ctx-item { width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 9px; border-radius: 6px; color: var(--fg-dim); font-size: 12px; text-align: left; transition: background .12s, color .12s; }
 .ctx-item:hover { background: var(--line-soft); color: var(--fg); }
@@ -512,12 +524,12 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
 .ctx-item.danger:hover { background: var(--danger-soft); color: var(--danger); }
 .ctx-sep { height: 1px; margin: 4px 2px; background: var(--line); }
 /* In-app confirm dialog (window.confirm blocks the WebView message loop). */
-.modal-backdrop { position: fixed; inset: 0; z-index: 950; display: grid; place-items: center; padding: 24px; background: rgba(8, 10, 14, .62); animation: fade-in .14s ease-out both; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 950; display: grid; place-items: center; padding: 24px; background: var(--scrim); animation: fade-in .14s ease-out both; }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-.modal { width: min(400px, 100%); padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg2); box-shadow: 0 24px 60px rgba(0, 0, 0, .5); animation: menu-in .16s ease-out both; }
+.modal { width: min(400px, 100%); padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg2); box-shadow: var(--shadow-modal); animation: menu-in .16s ease-out both; }
 .modal-head { display: flex; align-items: flex-start; gap: 11px; }
 .modal-ico { width: 34px; height: 34px; flex: none; display: grid; place-items: center; border: 1px solid var(--line-soft); border-radius: 9px; background: var(--bg3); color: var(--warn); }
-.modal-ico.danger { border-color: rgba(229, 72, 77, .3); background: var(--danger-soft); color: var(--danger); }
+.modal-ico.danger { border-color: var(--danger-line); background: var(--danger-soft); color: var(--danger); }
 .modal h2 { margin: 0; font-size: 14px; font-weight: 600; }
 .modal p { margin: 5px 0 0; color: var(--fg-dim); font-size: 12px; line-height: 1.6; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
@@ -573,6 +585,33 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
   .hk-row .hk-status-wrap, .hk-row .hk-action { display: none; }
   .hk-head span:nth-child(3), .hk-head span:nth-child(4) { display: none; }
 }
+/* --- 11. Light-theme adjustments -------------------------------------------- */
+/* Everything structural comes from ./shared/theme.css. What is left here is the
+   page's own scenery — the simulated desktop in the quick-menu demo, a couple of
+   dark-only shadows and washes — which no shared token describes. Dark keeps its
+   0.1.0 literals; only these rules change, and only in the light theme. */
+:root[data-theme="light"] .tool-card:hover { box-shadow: var(--shadow-card-hover); }
+/* The demo stage paints a desktop; in the light theme it is a bright wall. */
+:root[data-theme="light"] .qm-stage {
+  border-color: var(--line);
+  background:
+    radial-gradient(360px 220px at 16% 8%, rgba(78, 161, 255, .18), transparent 62%),
+    radial-gradient(320px 200px at 86% 94%, rgba(176, 132, 255, .16), transparent 64%),
+    linear-gradient(155deg, #f8fafd 0%, #eef2f7 58%, #e6ebf2 100%);
+}
+:root[data-theme="light"] .qm-stage::before {
+  background-image: linear-gradient(rgba(15, 23, 42, .07) 1px, transparent 1px), linear-gradient(90deg, rgba(15, 23, 42, .07) 1px, transparent 1px);
+}
+:root[data-theme="light"] .qm-desktop-bar { border-top-color: rgba(15, 23, 42, .07); background: rgba(255, 255, 255, .74); }
+:root[data-theme="light"] .qm-desktop-bar i { background: rgba(15, 23, 42, .24); }
+:root[data-theme="light"] .qm-zone-tag { border-color: var(--line); background: rgba(255, 255, 255, .84); }
+:root[data-theme="light"] .qm-ball-hint { border-color: var(--line); background: rgba(255, 255, 255, .88); }
+:root[data-theme="light"] .qm-ball { border-color: rgba(255, 255, 255, .9); box-shadow: 0 8px 20px rgba(15, 23, 42, .22), 0 0 0 5px rgba(78, 161, 255, .13); }
+:root[data-theme="light"] .qm-ball::after { border-color: rgba(255, 255, 255, .62); }
+:root[data-theme="light"] .qm-ball:hover { box-shadow: 0 8px 22px rgba(15, 23, 42, .26), 0 0 0 7px rgba(78, 161, 255, .16); }
+:root[data-theme="light"] .qm-stage.is-dragging .qm-ball { box-shadow: 0 12px 26px rgba(15, 23, 42, .28), 0 0 0 8px rgba(232, 178, 58, .18); }
+:root[data-theme="light"] .qm-fan-item { box-shadow: 0 5px 12px rgba(15, 23, 42, .18); }
+:root[data-theme="light"] .empty-state { background: var(--bg2); }
 </style>
 </head>
 <body>
@@ -585,13 +624,13 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.5 12 3l7 4.5v9L12 21l-7-4.5z"/><path d="m5 7.5 7 4.5 7-4.5M12 12v9"/></svg>
       </span>
       <span class="titlebar-name" data-tauri-drag-region>Toolbox</span>
-      <span class="titlebar-sub" data-tauri-drag-region>工具箱</span>
+      <span class="titlebar-sub" data-tauri-drag-region data-i18n="main:shell.titlebarSub">工具箱</span>
     </div>
     <div class="win-controls">
-      <button type="button" class="win-btn" id="win-min" style="-webkit-app-region: no-drag" aria-label="最小化" title="最小化">
+      <button type="button" class="win-btn" id="win-min" style="-webkit-app-region: no-drag" aria-label="最小化" title="最小化" data-i18n-title="main:shell.minimize">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
       </button>
-      <button type="button" class="win-btn win-close" id="win-close" style="-webkit-app-region: no-drag" aria-label="关闭" title="关闭">
+      <button type="button" class="win-btn win-close" id="win-close" style="-webkit-app-region: no-drag" aria-label="关闭" title="关闭" data-i18n-title="common:close">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg>
       </button>
     </div>
@@ -604,21 +643,34 @@ input[type="range"]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px 
           <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 7.5 12 3l7 4.5v9L12 21l-7-4.5z"/><path d="m5 7.5 7 4.5 7-4.5M12 12v9"/></svg>
         </div>
         <div class="brand-copy">
-          <strong>工具箱</strong>
-          <span>Toolbox</span>
+          <strong data-i18n="common:appName">工具箱</strong>
+          <span data-i18n="main:brand.sub">Toolbox</span>
         </div>
       </div>
       <nav class="nav" id="nav" aria-label="主导航"></nav>
       <div class="side-foot" id="side-foot"></div>
     </aside>
     <main class="content" id="view" tabindex="-1">
-      <div class="loading"><div class="spinner"></div><span>正在加载工具箱…</span></div>
+      <div class="loading"><div class="spinner"></div><span data-i18n="main:shell.loading">正在加载工具箱…</span></div>
     </main>
   </div>
 </div>
 <div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
 
 <script type="module">
+import { setupMainI18n } from './main-i18n.js';
+import { translateDom } from './shared/i18n-core.js';
+
+/* --- 0. Word list ----------------------------------------------------------- */
+/**
+ * Set once `boot()` has awaited the word list; `t` is safe to call meanwhile
+ * (it returns the key, which is what the pre-boot render would show anyway).
+ * Keys are namespaced with a colon: `main:…` for this page, `common:…` for the
+ * strings shared with the panel.
+ */
+let i18n = null;
+const t = (key, options) => (i18n ? i18n.t(key, options) : key);
+
 /* --- 1. Helpers ------------------------------------------------------------- */
 const $ = (selector, root = document) => root.querySelector(selector);
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -947,14 +999,23 @@ async function loadHost() {
 }
 
 /* --- 3. App state & constants ----------------------------------------------- */
+// Labels are functions: they resolve through `t` at paint time, so a live
+// language switch repaints them without touching this table.
 const NAV_ITEMS = [
-  { id: 'tools', label: '工具', icon: 'grid' },
-  { id: 'hotkeys', label: '快捷键', icon: 'keyboard' },
-  { id: 'settings', label: '设置', icon: 'sliders' },
-  { id: 'about', label: '关于', icon: 'info' }
+  { id: 'tools', label: () => t('main:nav.tools'), icon: 'grid' },
+  { id: 'hotkeys', label: () => t('main:nav.hotkeys'), icon: 'keyboard' },
+  { id: 'settings', label: () => t('main:nav.settings'), icon: 'sliders' },
+  { id: 'about', label: () => t('main:nav.about'), icon: 'info' }
 ];
-const SOURCE_LABELS = { official: '官方', installed: '第三方', dev: '开发中' };
 const SOURCE_CLASSES = { official: 'source-official', installed: 'source-installed', dev: 'source-dev' };
+
+/** Source badge text. A broken manifest can report anything, hence the fallback. */
+function sourceLabel(source) {
+  if (source === 'official') return t('main:source.official');
+  if (source === 'installed') return t('main:source.installed');
+  if (source === 'dev') return t('main:source.dev');
+  return t('main:source.unknown');
+}
 const MODIFIER_KEYS = new Set(['Control', 'Alt', 'Shift', 'Meta', 'OS', 'AltGraph']);
 const KEY_NAMES = {
   Space: 'Space', Tab: 'Tab', Backspace: 'Backspace', Delete: 'Delete', Insert: 'Insert', Home: 'Home', End: 'End',
@@ -970,7 +1031,7 @@ const state = {
 };
 
 let host = null;
-let invoke = async () => { throw new Error('宿主尚未就绪'); };
+let invoke = async () => { throw new Error(t('main:error.hostNotReady')); };
 let listen = () => () => {};
 let menuEl = null;
 let menuToolId = null;
@@ -996,21 +1057,24 @@ const quickDemo = {
 function renderSidebar() {
   const data = state.data;
   const nav = $('#nav');
+  nav.setAttribute('aria-label', t('main:nav.aria'));
   nav.innerHTML = NAV_ITEMS.map((item) => {
     const active = state.tab === item.id;
+    const label = item.label();
     const count = item.id === 'tools' && data ? `<span class="nav-count">${data.tools.length}</span>` : '';
-    return `<button type="button" class="nav-item${active ? ' active' : ''}" data-tab="${item.id}"${active ? ' aria-current="page"' : ''} title="${item.label}">
-      ${icon(item.icon, 16)}<span class="nav-label">${item.label}</span>${count}
+    return `<button type="button" class="nav-item${active ? ' active' : ''}" data-tab="${item.id}"${active ? ' aria-current="page"' : ''} title="${escapeAttr(label)}">
+      ${icon(item.icon, 16)}<span class="nav-label">${escapeHtml(label)}</span>${count}
     </button>`;
   }).join('');
 
   const foot = $('#side-foot');
   if (!data) {
-    foot.innerHTML = '<span class="side-version">v—</span><span class="badge">加载中</span>';
+    foot.innerHTML = `<span class="side-version">v—</span><span class="badge">${escapeHtml(t('main:shell.loadingBadge'))}</span>`;
     return;
   }
+  const portable = Boolean(data.portable);
   foot.innerHTML = `<span class="side-version">v${escapeHtml(data.version)}</span>
-    <span class="badge ${data.portable ? 'badge-ok' : 'badge-warn'}" title="${data.portable ? '配置与数据保存在程序目录' : '数据保存在系统用户目录'}">${data.portable ? '便携模式' : '非便携'}</span>`;
+    <span class="badge ${portable ? 'badge-ok' : 'badge-warn'}" title="${escapeAttr(portable ? t('main:shell.portableTitle') : t('main:shell.nonPortableTitle'))}">${escapeHtml(portable ? t('main:shell.portable') : t('main:shell.nonPortable'))}</span>`;
 }
 
 function render({ preserveScroll = false, animate = false } = {}) {
@@ -1019,16 +1083,16 @@ function render({ preserveScroll = false, animate = false } = {}) {
   renderSidebar();
 
   if (state.loading) {
-    view.innerHTML = '<div class="loading"><div class="spinner"></div><span>正在加载工具箱…</span></div>';
+    view.innerHTML = `<div class="loading"><div class="spinner"></div><span>${escapeHtml(t('main:shell.loading'))}</span></div>`;
     return;
   }
   if (state.error) {
     view.innerHTML = `<div class="error-state">
       <div class="empty-ico">${icon('alert', 20)}</div>
-      <h2>加载失败</h2>
-      <p>无法读取工具箱状态，请重试或检查宿主是否正在运行。</p>
+      <h2>${escapeHtml(t('main:error.title'))}</h2>
+      <p>${escapeHtml(t('main:error.body'))}</p>
       <code>${escapeHtml(state.error)}</code>
-      <button type="button" class="btn" data-retry>${icon('refresh', 14)}重新加载</button>
+      <button type="button" class="btn" data-retry>${icon('refresh', 14)}${escapeHtml(t('main:error.reload'))}</button>
     </div>`;
     return;
   }
@@ -1091,41 +1155,42 @@ function renderTools() {
   const data = state.data;
   const tools = data.tools;
   const official = tools.filter((tool) => tool.source === 'official');
+  const enabled = tools.filter((tool) => tool.enabled).length;
   const cards = tools.length
     ? tools.map(renderToolCard).join('')
     : `<div class="empty-state">
         <div class="empty-ico">${icon('grid', 20)}</div>
-        <h3>还没有安装工具</h3>
-        <p>从下方「工具市场」安装官方或第三方工具。</p>
+        <h3>${escapeHtml(t('main:tools.emptyTitle'))}</h3>
+        <p>${escapeHtml(t('main:tools.emptyBody'))}</p>
       </div>`;
 
   return `<section class="page">
     <div class="page-head">
       <div>
-        <h1>工具</h1>
-        <p>管理已安装的工具，或从本地 zip 安装新的第三方工具。</p>
+        <h1>${escapeHtml(t('main:tools.title'))}</h1>
+        <p>${escapeHtml(t('main:tools.subtitle'))}</p>
       </div>
       <div class="head-actions">
-        <button type="button" class="btn" data-refresh>${icon('refresh', 14)}刷新</button>
+        <button type="button" class="btn" data-refresh>${icon('refresh', 14)}${escapeHtml(t('common:refresh'))}</button>
       </div>
     </div>
 
     <section class="section first">
       <div class="section-head">
-        <h2>已安装</h2><span class="count">${tools.length}</span>
-        <span class="section-hint">${tools.filter((tool) => tool.enabled).length} 个已启用</span>
+        <h2>${escapeHtml(t('main:tools.installed'))}</h2><span class="count">${tools.length}</span>
+        <span class="section-hint">${escapeHtml(t('main:tools.enabledCount', { count: enabled }))}</span>
       </div>
       <div class="tool-grid">${cards}</div>
     </section>
 
     <section class="section">
-      <div class="section-head"><h2>工具市场</h2><span class="count">${official.length}</span></div>
+      <div class="section-head"><h2>${escapeHtml(t('main:market.title'))}</h2><span class="count">${official.length}</span></div>
       <div class="market-card">
         <div class="market-intro">
           <div class="market-icon">${icon('upload', 19)}</div>
           <div>
-            <h3>扩展你的工具箱</h3>
-            <p>官方工具随工具箱分发（<code>tools/</code> 目录），第三方工具从本地 zip 安装。安装前请确认来源可信。</p>
+            <h3>${escapeHtml(t('main:market.introTitle'))}</h3>
+            <p>${t('main:market.introBody', { dir: '<code>tools/</code>' })}</p>
           </div>
         </div>
         <div class="official-list">
@@ -1140,20 +1205,20 @@ function renderTools() {
               <div class="official-sub">v${escapeHtml(tool.version)} · ${escapeHtml(tool.author)}</div>
             </div>
             ${installed
-              ? `<span class="badge badge-ok">${icon('check', 11)}已安装</span>`
-              : `<button type="button" class="btn sm primary" data-install>${icon('download', 12)}安装</button>`}
+              ? `<span class="badge badge-ok">${icon('check', 11)}${escapeHtml(t('main:market.installed'))}</span>`
+              : `<button type="button" class="btn sm primary" data-install>${icon('download', 12)}${escapeHtml(t('main:market.install'))}</button>`}
           </div>`;
-          }).join('') : `<div class="official-sub">暂无官方工具</div>`}
+          }).join('') : `<div class="official-sub">${escapeHtml(t('main:market.noOfficial'))}</div>`}
         </div>
         <button type="button" class="dropzone" data-install ${state.installing ? 'disabled' : ''}>
           ${icon('upload', 22)}
-          <strong>${state.installing ? '正在安装…' : '从 zip 安装第三方工具…'}</strong>
-          <span>选择本地 .zip 工具包，安装完成后会出现在「已安装」列表</span>
+          <strong>${escapeHtml(state.installing ? t('main:install.installing') : t('main:install.pick'))}</strong>
+          <span>${escapeHtml(t('main:install.pickHint'))}</span>
         </button>
         <div class="path-line">
-          <span>官方工具目录</span>
+          <span>${escapeHtml(t('main:market.officialDir'))}</span>
           <code title="${escapeAttr(data.officialToolsDir)}">${escapeHtml(data.officialToolsDir || '—')}</code>
-          <button type="button" class="link-btn" data-reveal="officialTools" ${data.officialToolsDir ? '' : 'disabled'}>${icon('folder', 12)}打开目录</button>
+          <button type="button" class="link-btn" data-reveal="officialTools" ${data.officialToolsDir ? '' : 'disabled'}>${icon('folder', 12)}${escapeHtml(t('common:openFolder'))}</button>
         </div>
       </div>
     </section>
@@ -1161,15 +1226,15 @@ function renderTools() {
 }
 
 function renderToolCard(tool) {
-  const source = SOURCE_LABELS[tool.source] || '未知';
+  const source = sourceLabel(tool.source);
   const sourceClass = SOURCE_CLASSES[tool.source] || 'source-installed';
   const actions = (tool.actions || []).slice(0, 3);
   const chips = actions.length
     ? actions.map((action) => `<span class="action-chip" title="${escapeAttr(action.title)}">
         <span class="chip-title">${escapeHtml(action.title)}</span>
-        ${action.combo ? `<kbd>${escapeHtml(action.combo)}</kbd>` : '<span class="chip-empty">未设置</span>'}
+        ${action.combo ? `<kbd>${escapeHtml(action.combo)}</kbd>` : `<span class="chip-empty">${escapeHtml(t('common:notSet'))}</span>`}
       </span>`).join('')
-    : '<span class="chip-empty">暂无动作</span>';
+    : `<span class="chip-empty">${escapeHtml(t('main:tools.noActions'))}</span>`;
 
   return `<article class="tool-card${tool.enabled ? '' : ' is-disabled'}" data-tool-card="${escapeAttr(tool.id)}">
     <div class="tool-top">
@@ -1182,22 +1247,21 @@ function renderToolCard(tool) {
         <div class="tool-meta">
           <span class="source-badge ${sourceClass}">${source}</span>
           <span class="tool-author">${escapeHtml(tool.author)}</span>
-          <span>·</span>
-          <span>${formatBytes(tool.sizeBytes)}</span>
-          ${tool.granted ? `<span>·</span><span title="安装时由你逐项授权的权限数量">${permissionCount(tool)} 项权限</span>` : ''}
-          ${tool.error ? `<span class="source-badge source-dev" title="${escapeAttr(tool.error)}">清单异常</span>` : ''}
+          <span class="meta-sep">${escapeHtml(formatBytes(tool.sizeBytes))}</span>
+          ${tool.granted ? `<span class="meta-sep" title="${escapeAttr(t('main:tools.permissions.title'))}">${escapeHtml(t('main:tools.permissions.count', { count: permissionCount(tool) }))}</span>` : ''}
+          ${tool.error ? `<span class="source-badge source-dev" title="${escapeAttr(tool.error)}">${escapeHtml(t('main:tools.manifestError'))}</span>` : ''}
         </div>
       </div>
     </div>
     <p class="tool-desc" title="${escapeAttr(tool.description)}">${escapeHtml(tool.description)}</p>
     <div class="action-chips">${chips}</div>
     <div class="card-foot">
-      <button type="button" class="btn primary sm" data-open-tool="${escapeAttr(tool.id)}" ${tool.enabled ? '' : 'disabled title="请先启用该工具"'}>
-        ${icon('play', 13)}打开
+      <button type="button" class="btn primary sm" data-open-tool="${escapeAttr(tool.id)}" ${tool.enabled ? '' : `disabled title="${escapeAttr(t('main:tools.enableFirst'))}"`}>
+        ${icon('play', 13)}${escapeHtml(t('common:open'))}
       </button>
       <div class="foot-right">
-        <span class="tool-state ${tool.enabled ? 'on' : 'off'}"><i></i>${tool.enabled ? '已启用' : '已停用'}</span>
-        <button type="button" class="icon-btn" data-menu-tool="${escapeAttr(tool.id)}" aria-label="更多操作" title="更多操作">${icon('more', 16)}</button>
+        <span class="tool-state ${tool.enabled ? 'on' : 'off'}"><i></i>${escapeHtml(tool.enabled ? t('main:tools.state.on') : t('main:tools.state.off'))}</span>
+        <button type="button" class="icon-btn" data-menu-tool="${escapeAttr(tool.id)}" aria-label="${escapeAttr(t('main:tools.more'))}" title="${escapeAttr(t('main:tools.more'))}">${icon('more', 16)}</button>
       </div>
     </div>
   </article>`;
@@ -1205,9 +1269,9 @@ function renderToolCard(tool) {
 
 /* --- 6. Page: hotkeys ------------------------------------------------------- */
 function hotkeyStatus(action) {
-  if (!action.combo) return { kind: 'unset', label: '未设置', reason: '' };
-  if (action.effective) return { kind: 'ok', label: '生效', reason: '' };
-  return { kind: 'warn', label: '冲突', reason: action.reason || '被其它程序占用' };
+  if (!action.combo) return { kind: 'unset', label: t('common:notSet'), reason: '' };
+  if (action.effective) return { kind: 'ok', label: t('main:hotkeys.status.ok'), reason: '' };
+  return { kind: 'warn', label: t('main:hotkeys.status.conflict'), reason: action.reason || t('main:hotkeys.status.taken') };
 }
 
 function renderHotkeyRow(action) {
@@ -1219,27 +1283,29 @@ function renderHotkeyRow(action) {
   const reason = status.reason
     ? `<span class="hk-reason" title="${escapeAttr(status.reason)}">${escapeHtml(status.reason)}</span>`
     : '';
-  const label = recording ? (state.recordedCombo || '按下组合键…') : (action.combo || '未设置');
+  const label = recording
+    ? (state.recordedCombo || t('main:hotkeys.record.prompt'))
+    : (action.combo || t('common:notSet'));
 
   return `<div class="hk-row${recording ? ' is-recording' : ''}">
     <div class="hk-name" title="${escapeAttr(action.title)}">${escapeHtml(action.title)}</div>
     <div class="hk-combo-wrap">
-      <button type="button" class="kbd-btn${action.combo ? '' : ' empty'}${recording ? ' recording' : ''}" data-record="${escapeAttr(action.id)}" title="${recording ? '按 Esc 取消，Enter 确认' : '点击录制新的快捷键'}">${escapeHtml(label)}</button>
-      ${recording ? '<span class="record-hint">Esc 取消 · Enter 确认</span>' : error}
+      <button type="button" class="kbd-btn${action.combo ? '' : ' empty'}${recording ? ' recording' : ''}" data-record="${escapeAttr(action.id)}" title="${escapeAttr(recording ? t('main:hotkeys.record.cancelTitle') : t('main:hotkeys.record.startTitle'))}">${escapeHtml(label)}</button>
+      ${recording ? `<span class="record-hint">${escapeHtml(t('main:hotkeys.record.hint'))}</span>` : error}
     </div>
     <div class="hk-status-wrap">
-      <span class="hk-status ${status.kind}"><i class="dot"></i>${status.label}</span>
+      <span class="hk-status ${status.kind}"><i class="dot"></i>${escapeHtml(status.label)}</span>
       ${reason}
     </div>
     <div class="hk-action">
-      <button type="button" class="btn sm ghost" data-reset-hotkey="${escapeAttr(action.id)}" ${recording ? 'disabled' : ''}>重置</button>
+      <button type="button" class="btn sm ghost" data-reset-hotkey="${escapeAttr(action.id)}" ${recording ? 'disabled' : ''}>${escapeHtml(t('main:hotkeys.reset'))}</button>
     </div>
   </div>`;
 }
 
 function renderHotkeyTable(actions, toolName = '') {
   return `<div class="hk-table">
-    <div class="hk-row hk-head"><span>功能</span><span>快捷键</span><span>状态</span><span></span></div>
+    <div class="hk-row hk-head"><span>${escapeHtml(t('main:hotkeys.column.action'))}</span><span>${escapeHtml(t('main:hotkeys.column.shortcut'))}</span><span>${escapeHtml(t('main:hotkeys.column.status'))}</span><span></span></div>
     ${actions.map((action) => renderHotkeyRow(stripToolPrefix(action, toolName))).join('')}
   </div>`;
 }
@@ -1270,40 +1336,44 @@ function renderHotkeys() {
   return `<section class="page">
     <div class="page-head">
       <div>
-        <h1>快捷键</h1>
-        <p>点击组合键开始录制。全局快捷键在所有工具窗口中共享。</p>
+        <h1>${escapeHtml(t('main:nav.hotkeys'))}</h1>
+        <p>${escapeHtml(t('main:hotkeys.subtitle'))}</p>
       </div>
-      <span class="page-badge"><span class="dot"></span>${total} 项快捷键</span>
+      <span class="page-badge"><span class="dot"></span>${escapeHtml(t('main:hotkeys.count', { count: total }))}</span>
     </div>
 
     <section class="hk-section">
-      <div class="hk-group-head"><h2>工具箱</h2><span class="source-badge source-official">应用级</span></div>
-      ${appActions.length ? renderHotkeyTable(appActions) : `<div class="empty-state"><div class="empty-ico">${icon('keyboard', 20)}</div><h3>暂无应用快捷键</h3><p>工具箱启动后会自动注册默认快捷键。</p></div>`}
+      <div class="hk-group-head"><h2>${escapeHtml(t('common:appName'))}</h2><span class="source-badge source-official">${escapeHtml(t('main:hotkeys.appScope'))}</span></div>
+      ${appActions.length ? renderHotkeyTable(appActions) : `<div class="empty-state"><div class="empty-ico">${icon('keyboard', 20)}</div><h3>${escapeHtml(t('main:hotkeys.emptyTitle'))}</h3><p>${escapeHtml(t('main:hotkeys.emptyBody'))}</p></div>`}
     </section>
 
     ${groups.map(({ tool, actions }) => `<section class="hk-section">
       <div class="hk-group-head">
         ${toolIcon(tool, true)}
         <h2>${escapeHtml(tool.name)}</h2>
-        <span class="source-badge ${SOURCE_CLASSES[tool.source] || 'source-installed'}">${SOURCE_LABELS[tool.source] || '工具'}</span>
+        <span class="source-badge ${SOURCE_CLASSES[tool.source] || 'source-installed'}">${escapeHtml(sourceLabel(tool.source))}</span>
       </div>
       ${renderHotkeyTable(actions, tool.name)}
     </section>`).join('')}
 
     <div class="hk-note">
       ${icon('alert', 15)}
-      <span>全局快捷键在前台为管理员权限窗口或全屏独占游戏时可能不生效。若提示冲突，请换一个组合键，或关闭占用该组合键的程序。</span>
+      <span>${escapeHtml(t('main:hotkeys.note'))}</span>
     </div>
   </section>`;
 }
 
 /* --- 6b. Quick menu: hover fan settings + live demo ------------------------- */
 const QUICK_MENU_MAX = 12;
-const QUICK_MENU_ZONES = [
-  { id: 'left', label: '屏幕左边缘', dir: '贴左边缘 · 向右展开' },
-  { id: 'right', label: '屏幕右边缘', dir: '贴右边缘 · 向左展开' },
-  { id: 'center', label: '自由浮动', dir: '不贴边 · 环绕展开' }
-];
+
+/** Dock zones of the hover fan. Labels resolve per language, so build them per paint. */
+function quickMenuZones() {
+  return [
+    { id: 'left', label: t('main:quickMenu.zone.left'), dir: t('main:quickMenu.zone.leftDir') },
+    { id: 'right', label: t('main:quickMenu.zone.right'), dir: t('main:quickMenu.zone.rightDir') },
+    { id: 'center', label: t('main:quickMenu.zone.center'), dir: t('main:quickMenu.zone.centerDir') }
+  ];
+}
 
 /** Clamp a raw `quickMenu` config blob to the shape the Rust host persists. */
 function normalizeQuickMenu(raw) {
@@ -1400,22 +1470,22 @@ function quickMenuSlotHtml(zone, index) {
     const avatar = tool
       ? quickToolAvatar(tool, 'qm-slot-ico', 19)
       : `<span class="qm-slot-ico" style="background:${tint('#98a1b0', .14)};color:var(--fg-faint)">?</span>`;
-    const tag = usable ? '' : `<span class="qm-slot-tag warn">${tool ? '已停用' : '未安装'}</span>`;
+    const tag = usable ? '' : `<span class="qm-slot-tag warn">${escapeHtml(tool ? t('main:tools.state.off') : t('main:tools.state.missing'))}</span>`;
     return `<div class="qm-slot">
       <span class="qm-slot-pos">${index + 1}</span>
-      <button type="button" class="qm-slot-main" data-qm-slot="${zone}" data-qm-index="${index}" title="点击更换工具"${disabled}>${avatar}<span class="qm-slot-name">${escapeHtml(tool ? tool.name : assigned)}</span>${tag}</button>
-      <button type="button" class="qm-slot-clear" data-qm-clear="${zone}" data-qm-index="${index}" title="清除该位置（回退为自动）" aria-label="清除该位置"${disabled}>${icon('x', 12)}</button>
+      <button type="button" class="qm-slot-main" data-qm-slot="${zone}" data-qm-index="${index}" title="${escapeAttr(t('main:quickMenu.slot.change'))}"${disabled}>${avatar}<span class="qm-slot-name">${escapeHtml(tool ? tool.name : assigned)}</span>${tag}</button>
+      <button type="button" class="qm-slot-clear" data-qm-clear="${zone}" data-qm-index="${index}" title="${escapeAttr(t('main:quickMenu.slot.clear'))}" aria-label="${escapeAttr(t('main:quickMenu.slot.clearAria'))}"${disabled}>${icon('x', 12)}</button>
     </div>`;
   }
   const autoId = quickMenuAutoIds(list)[index - list.length] || '';
   const autoTool = autoId ? state.data.tools.find((item) => item.id === autoId) : null;
   return `<div class="qm-slot empty auto">
     <span class="qm-slot-pos">${index + 1}</span>
-    <button type="button" class="qm-slot-main" data-qm-slot="${zone}" data-qm-index="${index}" title="选择工具；不选择时按已启用工具顺序自动填充"${disabled}>
+    <button type="button" class="qm-slot-main" data-qm-slot="${zone}" data-qm-index="${index}" title="${escapeAttr(t('main:quickMenu.slot.pick'))}"${disabled}>
       <span class="qm-slot-ico qm-slot-plus">${icon('plus', 12)}</span>
-      <span class="qm-slot-name">${autoTool ? escapeHtml(autoTool.name) : '未指定'}</span>
+      <span class="qm-slot-name">${autoTool ? escapeHtml(autoTool.name) : escapeHtml(t('main:quickMenu.slot.unassigned'))}</span>
     </button>
-    <span class="qm-slot-tag">自动</span>
+    <span class="qm-slot-tag">${escapeHtml(t('main:quickMenu.slot.auto'))}</span>
   </div>`;
 }
 
@@ -1426,8 +1496,8 @@ function quickMenuZoneHtml(zone) {
   for (let index = 0; index < qm.count; index += 1) slots += quickMenuSlotHtml(zone.id, index);
   return `<div class="qm-zone">
     <div class="qm-zone-head">
-      <span class="qm-zone-name">${zone.label}</span>
-      <span class="qm-zone-dir">${zone.dir}</span>
+      <span class="qm-zone-name">${escapeHtml(zone.label)}</span>
+      <span class="qm-zone-dir">${escapeHtml(zone.dir)}</span>
       <span class="qm-zone-count">${pinned}/${qm.count}</span>
     </div>
     <div class="qm-slots">${slots}</div>
@@ -1440,57 +1510,58 @@ function renderQuickMenuCard() {
   const disabled = off ? ' disabled' : '';
   const fill = Math.round(((qm.count - 1) / (QUICK_MENU_MAX - 1)) * 100);
   if (!quickDemo.zone) quickDemo.zone = quickMenuDefaultZone();
-  const zone = QUICK_MENU_ZONES.find((item) => item.id === quickDemo.zone) || QUICK_MENU_ZONES[1];
+  const zones = quickMenuZones();
+  const zone = zones.find((item) => item.id === quickDemo.zone) || zones[1];
   const enabledCount = quickMenuTools().length;
-  const toggle = `<button type="button" class="switch${qm.enabled ? ' on' : ''}" role="switch" aria-checked="${qm.enabled ? 'true' : 'false'}" aria-label="启用悬停快捷图标" data-qm-toggle="enabled"><span class="switch-thumb"></span></button>`;
+  const toggle = `<button type="button" class="switch${qm.enabled ? ' on' : ''}" role="switch" aria-checked="${qm.enabled ? 'true' : 'false'}" aria-label="${escapeAttr(t('main:quickMenu.enable'))}" data-qm-toggle="enabled"><span class="switch-thumb"></span></button>`;
 
   const body = `
     <div class="setting-row">
-      <div class="setting-label"><span>启用悬停快捷图标</span><small>鼠标停在悬浮圆球上时，常用工具沿屏幕边缘展开</small></div>
+      <div class="setting-label"><span>${escapeHtml(t('main:quickMenu.enable'))}</span><small>${escapeHtml(t('main:quickMenu.enableHint'))}</small></div>
       <div class="setting-control">${toggle}</div>
     </div>
     <div class="setting-row">
-      <div class="setting-label"><span>图标数量</span><small>每个方向最多展开的图标个数</small></div>
+      <div class="setting-label"><span>${escapeHtml(t('main:quickMenu.countTitle'))}</span><small>${escapeHtml(t('main:quickMenu.countHint'))}</small></div>
       <div class="setting-control">
         <div class="range-wrap">
-          <input type="range" id="qmCount" min="1" max="${QUICK_MENU_MAX}" step="1" value="${qm.count}" style="--fill:${fill}%" aria-label="图标数量"${disabled} />
-          <output class="range-out" id="qmCountOut">${qm.count} 个</output>
+          <input type="range" id="qmCount" min="1" max="${QUICK_MENU_MAX}" step="1" value="${qm.count}" style="--fill:${fill}%" aria-label="${escapeAttr(t('main:quickMenu.countTitle'))}"${disabled} />
+          <output class="range-out" id="qmCountOut">${escapeHtml(t('main:quickMenu.countValue', { count: qm.count }))}</output>
         </div>
       </div>
     </div>
     <div class="setting-row">
-      <div class="setting-label"><span>排列层数</span><small>两层时图标分成内外两圈，适合图标较多的情况</small></div>
+      <div class="setting-label"><span>${escapeHtml(t('main:quickMenu.ringsTitle'))}</span><small>${escapeHtml(t('main:quickMenu.ringsHint'))}</small></div>
       <div class="setting-control">
         <div class="seg">
-          <button type="button" class="seg-item${qm.rings === 1 ? ' active' : ''}" data-qm-rings="1"${disabled}>1 层</button>
-          <button type="button" class="seg-item${qm.rings === 2 ? ' active' : ''}" data-qm-rings="2"${disabled}>2 层</button>
+          <button type="button" class="seg-item${qm.rings === 1 ? ' active' : ''}" data-qm-rings="1"${disabled}>${escapeHtml(t('main:quickMenu.rings1'))}</button>
+          <button type="button" class="seg-item${qm.rings === 2 ? ' active' : ''}" data-qm-rings="2"${disabled}>${escapeHtml(t('main:quickMenu.rings2'))}</button>
         </div>
       </div>
     </div>
     <div class="qm-demo">
       <div class="qm-demo-head">
-        <span class="qm-demo-title">${icon('cursor', 13)}悬停预览</span>
-        <span class="qm-zone-switch" role="group" aria-label="预览圆球停靠位置">
-          ${QUICK_MENU_ZONES.map((item) => `<button type="button" class="seg-item${item.id === zone.id ? ' active' : ''}" data-qm-zone="${item.id}">${item.label}</button>`).join('')}
+        <span class="qm-demo-title">${icon('cursor', 13)}${escapeHtml(t('main:quickMenu.demoTitle'))}</span>
+        <span class="qm-zone-switch" role="group" aria-label="${escapeAttr(t('main:quickMenu.zoneAria'))}">
+          ${zones.map((item) => `<button type="button" class="seg-item${item.id === zone.id ? ' active' : ''}" data-qm-zone="${item.id}">${escapeHtml(item.label)}</button>`).join('')}
         </span>
       </div>
-      <div class="qm-stage${off ? ' is-off' : ''}" id="qmStage" data-zone="${zone.id}">
-        <div class="qm-zone-tag" id="qmZoneTag"><b>${zone.label}</b><span>${zone.dir}</span></div>
+      <div class="qm-stage${off ? ' is-off' : ''}" id="qmStage" data-zone="${zone.id}" data-off-label="${escapeAttr(t('main:quickMenu.offOverlay'))}">
+        <div class="qm-zone-tag" id="qmZoneTag"><b>${escapeHtml(zone.label)}</b><span>${escapeHtml(zone.dir)}</span></div>
         <div class="qm-fan" id="qmFan"></div>
-        <div class="qm-ball" id="qmBall" role="img" aria-label="悬停展开快捷图标；按住拖动试试（拖动时图标隐藏）"></div>
-        <div class="qm-ball-hint">悬停 / 拖动</div>
+        <div class="qm-ball" id="qmBall" role="img" aria-label="${escapeAttr(t('main:quickMenu.ballAria'))}"></div>
+        <div class="qm-ball-hint">${escapeHtml(t('main:quickMenu.ballHint'))}</div>
         <div class="qm-desktop-bar"><i></i><i></i><i></i><i></i></div>
       </div>
-      <div class="qm-demo-foot">${icon('info', 12)}<span>悬停圆球展开图标；指针移到图标上不会收起；拖动时图标不出现。</span><span class="qm-demo-stat" id="qmDemoStat"></span></div>
+      <div class="qm-demo-foot">${icon('info', 12)}<span>${escapeHtml(t('main:quickMenu.ballFoot'))}</span><span class="qm-demo-stat" id="qmDemoStat"></span></div>
     </div>
     <div class="qm-assign">
-      <div class="qm-assign-head"><h3>图标分配</h3><span>按顺序对应扇出位置；未指定的位置按已启用工具顺序自动填充（当前 ${enabledCount} 个已启用）</span></div>
-      <div class="qm-zones">${QUICK_MENU_ZONES.map(quickMenuZoneHtml).join('')}</div>
+      <div class="qm-assign-head"><h3>${escapeHtml(t('main:quickMenu.assign'))}</h3><span>${escapeHtml(t('main:quickMenu.assignHint', { count: enabledCount }))}</span></div>
+      <div class="qm-zones">${zones.map(quickMenuZoneHtml).join('')}</div>
     </div>`;
 
   return settingsCard(
-    '悬停快捷图标',
-    '鼠标悬停圆球时展开的快捷图标：贴边时沿屏幕边缘扇形展开，自由浮动时环绕圆球展开。',
+    t('main:quickMenu.title'),
+    t('main:quickMenu.subtitle'),
     body,
     off ? 'qm-card is-off' : 'qm-card'
   );
@@ -1509,10 +1580,10 @@ function quickDemoSetOpen(open) {
 }
 
 function quickDemoStatText() {
-  if (!state.data || !state.data.quickMenu.enabled) return '已关闭';
+  if (!state.data || !state.data.quickMenu.enabled) return t('main:quickMenu.off');
   const qm = state.data.quickMenu;
   const ids = quickMenuResolve(qm[quickDemo.zone] || [], quickDemo.countOverride || qm.count);
-  return `${ids.length} 个图标 · ${qm.rings} 层`;
+  return t('main:quickMenu.stat', { icons: ids.length, rings: qm.rings });
 }
 
 function updateQuickDemoStat() {
@@ -1697,13 +1768,14 @@ function mountQuickDemo() {
   stage.style.setProperty('--ox', `${origin.x}px`);
   stage.style.setProperty('--oy', `${origin.y}px`);
 
-  const zone = QUICK_MENU_ZONES.find((item) => item.id === quickDemo.zone) || QUICK_MENU_ZONES[1];
+  const zones = quickMenuZones();
+  const zone = zones.find((item) => item.id === quickDemo.zone) || zones[1];
   const tag = $('#qmZoneTag');
   if (tag) {
     tag.classList.toggle('drag', Boolean(quickDemo.dragging));
     tag.innerHTML = quickDemo.dragging
-      ? '<b>拖动中</b><span>松开后自动停靠，图标保持隐藏</span>'
-      : `<b>${zone.label}</b><span>${zone.dir}</span>`;
+      ? `<b>${escapeHtml(t('main:quickMenu.dragging'))}</b><span>${escapeHtml(t('main:quickMenu.draggingHint'))}</span>`
+      : `<b>${escapeHtml(zone.label)}</b><span>${escapeHtml(zone.dir)}</span>`;
   }
 
   const count = quickDemo.countOverride || qm.count;
@@ -1727,7 +1799,7 @@ function mountQuickDemo() {
 }
 
 function switchQuickDemoZone(id) {
-  if (!QUICK_MENU_ZONES.some((zone) => zone.id === id)) return;
+  if (!quickMenuZones().some((zone) => zone.id === id)) return;
   quickDemo.zone = id;
   quickDemo.fx = null;
   quickDemo.fy = null;
@@ -1833,7 +1905,7 @@ function closeQuickPicker() {
 function openQuickSlotPicker(button) {
   const zone = button.dataset.qmSlot;
   const index = Number(button.dataset.qmIndex);
-  const meta = QUICK_MENU_ZONES.find((item) => item.id === zone);
+  const meta = quickMenuZones().find((item) => item.id === zone);
   if (!meta || !Number.isFinite(index) || !state.data) return;
   const qm = state.data.quickMenu;
   if (!qm.enabled) return;
@@ -1843,7 +1915,7 @@ function openQuickSlotPicker(button) {
   const tools = quickMenuTools();
   const autoItem = `<button type="button" class="qm-pick${current ? '' : ' active'}" role="menuitem" data-qm-pick="">
     <span class="qm-pick-ico qm-pick-auto">${icon('refresh', 13)}</span>
-    <span class="qm-pick-name">自动（按已启用工具顺序填充）</span>
+    <span class="qm-pick-name">${escapeHtml(t('main:quickMenu.picker.auto'))}</span>
     ${current ? '' : `<span class="qm-pick-check">${icon('check', 13)}</span>`}
   </button>`;
   const toolItems = tools.length
@@ -1852,16 +1924,16 @@ function openQuickSlotPicker(button) {
         <span class="qm-pick-name">${escapeHtml(tool.name)}</span>
         ${current === tool.id ? `<span class="qm-pick-check">${icon('check', 13)}</span>` : ''}
       </button>`).join('')
-    : '<div class="qm-pick-empty" style="padding:12px 8px;color:var(--fg-faint);font-size:11px;text-align:center">还没有已启用的工具</div>';
+    : `<div class="qm-pick-empty" style="padding:12px 8px;color:var(--fg-faint);font-size:11px;text-align:center">${escapeHtml(t('main:quickMenu.picker.empty'))}</div>`;
 
   quickPickerEl = document.createElement('div');
   quickPickerEl.className = 'qm-picker';
   quickPickerEl.setAttribute('role', 'menu');
   quickPickerEl.dataset.zone = zone;
   quickPickerEl.dataset.index = String(index);
-  quickPickerEl.innerHTML = `<div class="qm-picker-head"><b>${meta.label}</b> · 第 ${index + 1} 个位置</div>
+  quickPickerEl.innerHTML = `<div class="qm-picker-head"><b>${escapeHtml(meta.label)}</b> · ${escapeHtml(t('main:quickMenu.picker.position', { index: index + 1 }))}</div>
     <div class="qm-picker-list">${autoItem}${toolItems}</div>
-    <div class="qm-pick-foot">未指定的位置会按已启用工具顺序自动填充</div>`;
+    <div class="qm-pick-foot">${escapeHtml(t('main:quickMenu.picker.foot'))}</div>`;
   document.body.appendChild(quickPickerEl);
 
   const rect = button.getBoundingClientRect();
@@ -1900,7 +1972,7 @@ async function commitQuickMenu(next) {
 
 async function assignQuickSlot(zone, index, toolId) {
   if (!state.data || state.saving) return;
-  if (!QUICK_MENU_ZONES.some((item) => item.id === zone) || !Number.isFinite(index)) return;
+  if (!quickMenuZones().some((item) => item.id === zone) || !Number.isFinite(index)) return;
   const qm = normalizeQuickMenu(state.data.quickMenu);
   const list = qm[zone].slice();
   if (!toolId) {
@@ -1915,7 +1987,7 @@ async function assignQuickSlot(zone, index, toolId) {
     let cursor = 0;
     while (list.length < index && cursor < fillers.length) list.push(fillers[cursor++]);
     if (list.length < index) {
-      toast('已启用工具不足，无法占用这个位置', 'warn');
+      toast(t('main:toast.slotFull'), 'warn');
       return;
     }
     if (list.length === index) list.push(toolId);
@@ -1947,7 +2019,7 @@ function onQuickEscape(event) {
 /* --- 7. Page: settings ------------------------------------------------------ */
 function settingsCard(title, subtitle, body, extraClass = '') {
   return `<section class="settings-card ${extraClass}">
-    <div class="settings-head"><h2>${title}</h2><p>${subtitle}</p></div>
+    <div class="settings-head"><h2>${escapeHtml(title)}</h2><p>${escapeHtml(subtitle)}</p></div>
     ${body}
   </section>`;
 }
@@ -1960,44 +2032,62 @@ function renderSettings() {
   const data = state.data;
   const config = data.config;
   const ballY = data.ballYPercent;
-  const theme = config.theme || 'dark';
+  const theme = config.theme || 'system';
+  const themeHint = themeHintText(theme);
+  const locale = config.locale || 'system';
+  const localeHint = localeHintText(locale);
 
   return `<section class="page">
     <div class="page-head">
       <div>
-        <h1>设置</h1>
-        <p>调整工具箱的外观、悬停快捷图标、启动方式与数据位置。</p>
+        <h1>${escapeHtml(t('main:nav.settings'))}</h1>
+        <p>${escapeHtml(t('main:settings.subtitle'))}</p>
       </div>
-      <span class="page-badge">${host && host.isHosted ? '已连接宿主' : '浏览器预览'}</span>
+      <span class="page-badge">${escapeHtml(host && host.isHosted ? t('main:settings.hostConnected') : t('main:settings.preview'))}</span>
     </div>
 
     <div class="settings-stack">
-      ${settingsCard('外观', '界面配色与悬浮圆球的位置。', `
+      ${settingsCard(t('main:settings.appearance.title'), t('main:settings.appearance.subtitle'), `
         <div class="setting-row">
-          <div class="setting-label"><span>主题</span><small>深色主题已针对工具箱优化</small></div>
+          <div class="setting-label"><span>${escapeHtml(t('main:settings.theme.title'))}</span><small>${escapeHtml(t('main:settings.theme.hint'))}</small></div>
           <div class="setting-control">
-            <div class="seg" title="主题切换即将支持">
-              <button type="button" class="seg-item${theme === 'system' ? ' active' : ''}" disabled title="即将支持">跟随系统</button>
-              <button type="button" class="seg-item${theme === 'dark' ? ' active' : ''}" disabled title="即将支持">深色</button>
-              <button type="button" class="seg-item${theme === 'light' ? ' active' : ''}" disabled title="即将支持">浅色</button>
+            <div class="theme-control">
+              <div class="seg" role="group" aria-label="${escapeAttr(t('main:settings.theme.aria'))}">
+                <button type="button" class="seg-item${theme === 'system' ? ' active' : ''}" data-theme-choice="system">${escapeHtml(t('main:settings.theme.system'))}</button>
+                <button type="button" class="seg-item${theme === 'light' ? ' active' : ''}" data-theme-choice="light">${escapeHtml(t('main:settings.theme.light'))}</button>
+                <button type="button" class="seg-item${theme === 'dark' ? ' active' : ''}" data-theme-choice="dark">${escapeHtml(t('main:settings.theme.dark'))}</button>
+              </div>
+              <small class="theme-hint">${escapeHtml(themeHint)}</small>
             </div>
-            <span class="soon">即将支持</span>
           </div>
         </div>
         <div class="setting-row">
-          <div class="setting-label"><span>圆球停靠</span><small>悬浮圆球在屏幕边缘的位置</small></div>
+          <div class="setting-label"><span>${escapeHtml(t('main:settings.language.title'))}</span><small>${escapeHtml(t('main:settings.language.hint'))}</small></div>
+          <div class="setting-control">
+            <div class="theme-control">
+              <div class="seg" role="group" aria-label="${escapeAttr(t('main:settings.language.aria'))}">
+                <button type="button" class="seg-item${locale === 'system' ? ' active' : ''}" data-locale-choice="system">${escapeHtml(t('main:settings.language.system'))}</button>
+                <button type="button" class="seg-item${locale === 'zh-CN' ? ' active' : ''}" data-locale-choice="zh-CN">${escapeHtml(t('main:settings.language.zh'))}</button>
+                <button type="button" class="seg-item${locale === 'en-US' ? ' active' : ''}" data-locale-choice="en-US">${escapeHtml(t('main:settings.language.en'))}</button>
+              </div>
+              <small class="theme-hint">${escapeHtml(localeHint)}</small>
+            </div>
+          </div>
+        </div>
+        <div class="setting-row">
+          <div class="setting-label"><span>${escapeHtml(t('main:settings.ballDock.title'))}</span><small>${escapeHtml(t('main:settings.ballDock.hint'))}</small></div>
           <div class="setting-control">
             <div class="seg">
-              <button type="button" class="seg-item${config.ballSide === 'right' ? ' active' : ''}" data-ballside="right">右侧</button>
-              <button type="button" class="seg-item${config.ballSide === 'left' ? ' active' : ''}" data-ballside="left">左侧</button>
+              <button type="button" class="seg-item${config.ballSide === 'right' ? ' active' : ''}" data-ballside="right">${escapeHtml(t('main:settings.ballDock.right'))}</button>
+              <button type="button" class="seg-item${config.ballSide === 'left' ? ' active' : ''}" data-ballside="left">${escapeHtml(t('main:settings.ballDock.left'))}</button>
             </div>
           </div>
         </div>
         <div class="setting-row">
-          <div class="setting-label"><span>圆球纵向位置</span><small>0% 为屏幕顶部，100% 为底部</small></div>
+          <div class="setting-label"><span>${escapeHtml(t('main:settings.ballY.title'))}</span><small>${escapeHtml(t('main:settings.ballY.hint'))}</small></div>
           <div class="setting-control">
             <div class="range-wrap">
-              <input type="range" id="ballY" min="0" max="100" step="1" value="${ballY}" style="--fill:${ballY}%" aria-label="圆球纵向位置" />
+              <input type="range" id="ballY" min="0" max="100" step="1" value="${ballY}" style="--fill:${ballY}%" aria-label="${escapeAttr(t('main:settings.ballY.title'))}" />
               <output class="range-out" id="ballYOut">${ballY}%</output>
             </div>
           </div>
@@ -2006,82 +2096,78 @@ function renderSettings() {
 
       ${renderQuickMenuCard()}
 
-      ${settingsCard('启动', '控制工具箱随系统启动以及与托盘的交互。', `
+      ${settingsCard(t('main:settings.startup.title'), t('main:settings.startup.subtitle'), `
         <div class="setting-row">
-          <div class="setting-label"><span>开机自启</span><small>登录 Windows 后自动启动工具箱</small></div>
-          <div class="setting-control">${switchHtml('autostart', Boolean(config.autostart), '开机自启')}</div>
+          <div class="setting-label"><span>${escapeHtml(t('main:settings.startup.autostart'))}</span><small>${escapeHtml(t('main:settings.startup.autostartHint'))}</small></div>
+          <div class="setting-control">${switchHtml('autostart', Boolean(config.autostart), t('main:settings.startup.autostart'))}</div>
         </div>
         <div class="setting-row">
-          <div class="setting-label"><span>关闭主窗口时最小化到托盘</span><small>关闭窗口后继续在后台运行</small></div>
-          <div class="setting-control">${switchHtml('closeToTray', Boolean(config.closeToTray), '关闭主窗口时最小化到托盘')}</div>
+          <div class="setting-label"><span>${escapeHtml(t('main:settings.startup.tray'))}</span><small>${escapeHtml(t('main:settings.startup.trayHint'))}</small></div>
+          <div class="setting-control">${switchHtml('closeToTray', Boolean(config.closeToTray), t('main:settings.startup.tray'))}</div>
         </div>
       `)}
 
-      ${settingsCard('数据', '配置与工具数据的位置。便携模式下所有内容都在程序目录。', `
+      ${settingsCard(t('main:settings.data.title'), t('main:settings.data.subtitle'), `
         <div class="setting-row">
           <div class="setting-label" style="flex:1;min-width:0">
-            <span>数据目录</span>
-            <small>配置、日志与第三方工具都保存在这里</small>
+            <span>${escapeHtml(t('main:settings.data.dir'))}</span>
+            <small>${escapeHtml(t('main:settings.data.dirHint'))}</small>
           </div>
           <div class="setting-control wide">
             <div class="path-box" style="flex:1">
               <code title="${escapeAttr(data.dataDir)}">${escapeHtml(data.dataDir || '—')}</code>
-              <button type="button" class="btn sm" data-reveal="data">${icon('folder', 13)}打开目录</button>
-              <button type="button" class="btn sm" data-copy="${escapeAttr(data.dataDir)}">${icon('copy', 13)}复制路径</button>
+              <button type="button" class="btn sm" data-reveal="data">${icon('folder', 13)}${escapeHtml(t('common:openFolder'))}</button>
+              <button type="button" class="btn sm" data-copy="${escapeAttr(data.dataDir)}">${icon('copy', 13)}${escapeHtml(t('main:settings.data.copyPath'))}</button>
             </div>
           </div>
         </div>
         <div class="setting-row">
-          <div class="setting-label"><span>便携模式</span><small>删除 data/ 目录即可完全重置</small></div>
-          <div class="setting-control"><span class="badge ${data.portable ? 'badge-ok' : 'badge-warn'}">${data.portable ? '已启用 · 便携模式' : '未启用 · 非便携'}</span></div>
+          <div class="setting-label"><span>${escapeHtml(t('main:settings.data.portableTitle'))}</span><small>${escapeHtml(t('main:settings.data.portableHint'))}</small></div>
+          <div class="setting-control"><span class="badge ${data.portable ? 'badge-ok' : 'badge-warn'}">${escapeHtml(data.portable ? t('main:settings.data.portableOn') : t('main:settings.data.portableOff'))}</span></div>
         </div>
         <div class="setting-row">
-          <div class="setting-label"><span>维护</span><small>查看运行日志或导出当前配置</small></div>
+          <div class="setting-label"><span>${escapeHtml(t('main:settings.data.maintenance'))}</span><small>${escapeHtml(t('main:settings.data.maintenanceHint'))}</small></div>
           <div class="setting-control data-actions">
-            <button type="button" class="btn sm" data-reveal="logs">${icon('log', 13)}打开日志目录</button>
-            <button type="button" class="btn sm" disabled title="即将支持">${icon('download', 13)}导出配置</button>
+            <button type="button" class="btn sm" data-reveal="logs">${icon('log', 13)}${escapeHtml(t('main:settings.data.logs'))}</button>
+            <button type="button" class="btn sm" disabled title="${escapeAttr(t('main:settings.data.soon'))}">${icon('download', 13)}${escapeHtml(t('main:settings.data.export'))}</button>
           </div>
         </div>
       `)}
 
-      ${settingsCard('危险区', '这些操作会影响工具箱的运行状态，请谨慎使用。', `
+      ${settingsCard(t('main:settings.danger.title'), t('main:settings.danger.subtitle'), `
         <div class="danger-actions">
-          <button type="button" class="btn" data-restart>${icon('restart', 14)}重启工具箱</button>
-          <button type="button" class="btn danger" data-quit>${icon('power', 14)}退出</button>
+          <button type="button" class="btn" data-restart>${icon('restart', 14)}${escapeHtml(t('main:settings.danger.restart'))}</button>
+          <button type="button" class="btn danger" data-quit>${icon('power', 14)}${escapeHtml(t('main:settings.danger.quit'))}</button>
         </div>
       `, 'danger-zone')}
     </div>
-    <p class="settings-foot">设置修改后立即写入配置文件；部分外观选项会在后续版本开放。</p>
+    <p class="settings-foot">${escapeHtml(t('main:settings.foot'))}</p>
   </section>`;
 }
 
 /* --- 8. Page: about --------------------------------------------------------- */
 function renderAbout() {
   const data = state.data;
+  // Frame around the stack list; the word order differs per language, so the
+  // whole sentence is one word-list entry with the marked-up list interpolated.
+  const stack = '<b>Tauri 2</b><span class="tech-dot">·</span><b>Rust</b><span class="tech-dot">·</span><b>WebView2</b>';
   return `<section class="page">
     <div class="about-wrap">
       <div class="about-card">
         <div class="about-logo">${icon('logo', 34)}</div>
-        <h1>工具箱<span class="about-en">Toolbox</span></h1>
+        <h1><span>${escapeHtml(t('common:appName'))}</span><span class="about-en">${escapeHtml(t('main:brand.sub'))}</span></h1>
         <span class="pill version-pill about-version">v${escapeHtml(data.version)}</span>
-        <p class="about-desc">
-          一个轻量的桌面工具集合。把常用的图像、文件与系统小工具集中在一个窗口里，
-          通过悬浮圆球和全局快捷键随时呼出，让工具触手可及。
-        </p>
-        <div class="tech-line">
-          <span>基于</span><b>Tauri 2</b><span class="tech-dot">·</span><b>Rust</b><span class="tech-dot">·</span><b>WebView2</b><span>构建</span>
-        </div>
+        <p class="about-desc">${escapeHtml(t('main:about.desc'))}</p>
+        <div class="tech-line">${t('main:about.tech', { stack })}</div>
         <div class="about-note">
           ${icon('folder', 15)}
-          <span>${data.portable
-            ? '当前为便携模式：配置、日志与第三方工具全部保存在程序目录，不会写入系统用户目录。'
-            : '当前为非便携模式：配置与数据保存在系统用户目录，卸载前请先备份。'}</span>
+          <span>${escapeHtml(data.portable ? t('main:about.portableNote') : t('main:about.nonPortableNote'))}</span>
         </div>
         <div class="about-meta">
-          <div><span>数据目录</span><strong title="${escapeAttr(data.dataDir)}">${escapeHtml(data.dataDir || '—')}</strong></div>
-          <div><span>运行方式</span><strong>${host && host.isHosted ? 'Tauri 桌面宿主' : '浏览器预览（Mock）'}</strong></div>
+          <div><span>${escapeHtml(t('main:settings.data.dir'))}</span><strong title="${escapeAttr(data.dataDir)}">${escapeHtml(data.dataDir || '—')}</strong></div>
+          <div><span>${escapeHtml(t('main:about.runtime'))}</span><strong>${escapeHtml(host && host.isHosted ? t('main:about.runtimeHost') : t('main:about.runtimePreview'))}</strong></div>
         </div>
-        <div class="about-foot">数据完全保存在程序目录，删除 data/ 即完全重置。</div>
+        <div class="about-foot">${escapeHtml(t('main:about.foot'))}</div>
       </div>
     </div>
   </section>`;
@@ -2102,7 +2188,7 @@ async function refresh({ silent = false } = {}) {
       state.loading = false;
       state.error = error && error.message ? error.message : String(error);
       render();
-      if (!silent) toast('加载失败，请稍后重试', 'danger');
+      if (!silent) toast(t('main:toast.loadFailed'), 'danger');
     } finally {
       refreshPromise = null;
     }
@@ -2113,7 +2199,7 @@ async function refresh({ silent = false } = {}) {
 function normalizeState(raw) {
   const data = raw || {};
   const config = {
-    locale: 'zh-CN', theme: 'dark', ballSide: 'right', ballY: 50,
+    locale: 'zh-CN', theme: 'system', ballSide: 'right', ballY: 50,
     panelHotkey: 'Alt+Space', autostart: false, closeToTray: true,
     quickMenu: { enabled: true, count: 5, rings: 2, left: [], right: [], center: [] },
     ...(data.config || {})
@@ -2132,6 +2218,9 @@ function normalizeState(raw) {
     installedToolsDir: data.installedToolsDir || '',
     ballYFraction: fractionUnit,
     ballYPercent: Math.min(100, Math.max(0, Math.round(percent))),
+    // `get_state` reports the resolved environment (applied theme, OS theme,
+    // locale choices); the theme control reads it to caption the switch.
+    env: data.env && typeof data.env === 'object' ? data.env : null,
     config,
     quickMenu: normalizeQuickMenu(config.quickMenu),
     tools: Array.isArray(data.tools) ? data.tools : [],
@@ -2159,12 +2248,12 @@ function setTab(tab) {
 async function savePatch(patch) {
   try {
     const result = await invoke('save_config', { patch });
-    if (result && result.ok === false) throw new Error(result.error || '保存失败');
+    if (result && result.ok === false) throw new Error(result.error || t('main:toast.saveFailed'));
     Object.assign(state.data.config, patch);
-    toast('已保存', 'ok');
+    toast(t('main:toast.saved'), 'ok');
     return true;
   } catch (error) {
-    toast(`保存失败：${error && error.message ? error.message : error}`, 'danger');
+    toast(t('main:toast.saveFailedWith', { error: error && error.message ? error.message : error }), 'danger');
     return false;
   }
 }
@@ -2215,10 +2304,10 @@ async function openTool(id, button) {
   if (button) button.disabled = true;
   try {
     const result = await invoke('open_tool', { id });
-    if (result && result.ok === false) throw new Error(result.error || '打开失败');
-    toast(`已打开「${tool.name}」`, 'ok');
+    if (result && result.ok === false) throw new Error(result.error || t('main:toast.openFailed'));
+    toast(t('main:toast.opened', { name: tool.name }), 'ok');
   } catch (error) {
-    toast(`打开失败：${error && error.message ? error.message : error}`, 'danger');
+    toast(t('main:toast.openFailedWith', { error: error && error.message ? error.message : error }), 'danger');
   } finally {
     if (button && document.body.contains(button)) button.disabled = false;
   }
@@ -2236,12 +2325,12 @@ async function openTool(id, button) {
 async function installTool(button) {
   if (state.installing) return;
   state.installing = true;
-  setInstallButtonBusy(button, '正在检查安装包…');
+  setInstallButtonBusy(button, t('main:install.checking'));
   try {
     const inspection = await invoke('inspect_tool_zip');
     if (!inspection || inspection.ok === false) {
-      if (inspection && inspection.error === 'cancelled') toast('已取消安装', 'info');
-      else toast(inspection && inspection.error ? `安装失败：${inspection.error}` : '安装失败', 'warn');
+      if (inspection && inspection.error === 'cancelled') toast(t('main:toast.installCancelled'), 'info');
+      else toast(inspection && inspection.error ? t('main:toast.installFailedWith', { error: inspection.error }) : t('main:toast.installFailed'), 'warn');
       return;
     }
     // Explicit permission review; null means the user cancelled.
@@ -2252,26 +2341,26 @@ async function installTool(button) {
       } catch (error) {
         console.warn('[toolbox] discard pending install failed', error);
       }
-      toast('已取消安装，未做任何更改', 'info');
+      toast(t('main:toast.installCancelledClean'), 'info');
       return;
     }
-    setInstallButtonBusy(button, '正在安装…');
+    setInstallButtonBusy(button, t('main:install.installing'));
     const result = await invoke('install_tool', { inspectionId: inspection.inspectionId, granted });
     if (result && result.ok) {
       // Clear the busy flag before refetching: `refresh` re-renders the dropzone
       // and must not paint the "installing…" state.
       state.installing = false;
-      toast(`安装成功：${result.name || result.id || '工具'}`, 'ok');
+      toast(t('main:toast.installOk', { name: result.name || result.id || t('main:install.unknownTool') }), 'ok');
       await refresh({ silent: true });
       return;
     }
     if (result && result.error === 'cancelled') {
-      toast('已取消安装，未做任何更改', 'info');
+      toast(t('main:toast.installCancelledClean'), 'info');
     } else {
-      toast(result && result.error ? `安装失败：${result.error}` : '安装失败', 'warn');
+      toast(result && result.error ? t('main:toast.installFailedWith', { error: result.error }) : t('main:toast.installFailed'), 'warn');
     }
   } catch (error) {
-    toast(`安装失败：${error && error.message ? error.message : error}`, 'danger');
+    toast(t('main:toast.installFailedWith', { error: error && error.message ? error.message : error }), 'danger');
   } finally {
     state.installing = false;
     setInstallButtonBusy(button, null);
@@ -2289,7 +2378,7 @@ function setInstallButtonBusy(button, label) {
   if (!document.body.contains(button)) return;
   button.disabled = false;
   const strong = button.querySelector('strong');
-  if (strong) strong.textContent = '从 zip 安装第三方工具…';
+  if (strong) strong.textContent = t('main:install.pick');
 }
 
 /**
@@ -2303,8 +2392,8 @@ function reviewInstallDialog(inspection) {
   return new Promise((resolve) => {
     const declared = (Array.isArray(inspection.permissionItems) ? inspection.permissionItems : [])
       .filter((item) => item && item.bit);
-    const name = inspection.name || inspection.id || '未知工具';
-    const author = inspection.author || '未知作者';
+    const name = inspection.name || inspection.id || t('main:install.unknownTool');
+    const author = inspection.author || t('main:install.unknownAuthor');
     const version = inspection.version || '0.0.0';
     const domainHint = Array.isArray(inspection.permissions && inspection.permissions.network)
       ? inspection.permissions.network
@@ -2320,13 +2409,14 @@ function reviewInstallDialog(inspection) {
             <span class="perm-detail">${escapeHtml(item.detail || '')}</span>
           </span>
         </label>`).join('')
-      : '<div class="review-empty">该工具未申请任何额外权限</div>';
+      : `<div class="review-empty">${escapeHtml(t('main:install.review.noPermissions'))}</div>`;
 
     const upgrade = inspection.isUpgrade
-      ? `<div class="review-upgrade">${icon('alert', 15)}<span>「${escapeHtml(name)}」已安装，继续将覆盖当前版本，旧版本会自动备份到 data/backups/tools/。</span></div>`
+      ? `<div class="review-upgrade">${icon('alert', 15)}<span>${escapeHtml(t('main:install.review.upgrade', { name }))}</span></div>`
       : '';
+    const domains = domainHint.join(t('main:install.review.domainsSeparator'));
     const networkNote = domainHint.length
-      ? `<span class="review-stat">${icon('info', 12)}可访问域名：${escapeHtml(domainHint.join('、'))}</span>`
+      ? `<span class="review-stat">${icon('info', 12)}${escapeHtml(t('main:install.review.domains', { domains }))}</span>`
       : '';
 
     const backdrop = document.createElement('div');
@@ -2335,30 +2425,30 @@ function reviewInstallDialog(inspection) {
       <div class="review-head">
         ${toolIcon({ name, iconDataUrl: inspection.iconDataUrl, accent: '#4ea1ff' })}
         <div class="review-title">
-          <h2 id="review-title">安装「${escapeHtml(name)}」</h2>
+          <h2 id="review-title">${escapeHtml(t('main:install.review.title', { name }))}</h2>
           <div class="review-sub">
             <span class="pill version-pill">v${escapeHtml(version)}</span>
             <span>${escapeHtml(author)}</span>
             <span>·</span>
-            <code title="工具 id">${escapeHtml(inspection.id || name)}</code>
+            <code title="${escapeAttr(t('main:install.review.idTitle'))}">${escapeHtml(inspection.id || name)}</code>
           </div>
         </div>
       </div>
-      <p class="review-desc">${escapeHtml(inspection.description || '该工具未提供描述。')}</p>
+      <p class="review-desc">${escapeHtml(inspection.description || t('main:install.review.noDescription'))}</p>
       <div class="review-stats">
-        <span class="review-stat">${icon('folder', 12)}${fileCount} 个文件</span>
-        <span class="review-stat">${icon('download', 12)}解压后 ${formatBytes(totalBytes)}</span>
+        <span class="review-stat">${icon('folder', 12)}${escapeHtml(t('main:install.review.files', { count: fileCount }))}</span>
+        <span class="review-stat">${icon('download', 12)}${escapeHtml(t('main:install.review.unpacked', { size: formatBytes(totalBytes) }))}</span>
         ${networkNote}
       </div>
       ${upgrade}
-      <div class="review-section-title">${icon('sliders', 13)}权限授权
-        <span class="hint">${declared.length ? `已声明 ${declared.length} 项，可取消勾选` : '无额外权限'}</span>
+      <div class="review-section-title">${icon('sliders', 13)}${escapeHtml(t('main:install.review.permissions'))}
+        <span class="hint">${escapeHtml(declared.length ? t('main:install.review.declared', { count: declared.length }) : t('main:install.review.noneDeclared'))}</span>
       </div>
       <div class="perm-list">${rows}</div>
-      <div class="review-note">只有勾选的权限会被授予该工具，未勾选的权限在运行时会被桥接层直接拒绝。请只安装来自可信来源的工具。</div>
+      <div class="review-note">${escapeHtml(t('main:install.review.note'))}</div>
       <div class="modal-actions">
-        <button type="button" class="btn" data-review-cancel>取消</button>
-        <button type="button" class="btn primary" data-review-ok>${icon('download', 13)}安装</button>
+        <button type="button" class="btn" data-review-cancel>${escapeHtml(t('common:cancel'))}</button>
+        <button type="button" class="btn primary" data-review-ok>${icon('download', 13)}${escapeHtml(t('main:market.install'))}</button>
       </div>
     </div>`;
 
@@ -2394,20 +2484,20 @@ function reviewInstallDialog(inspection) {
 async function revealPath(kind) {
   try {
     await invoke('reveal_path', { kind });
-    toast('已打开目录', 'ok');
+    toast(t('main:toast.revealOk'), 'ok');
   } catch (error) {
-    toast(`无法打开目录：${error && error.message ? error.message : error}`, 'danger');
+    toast(t('main:toast.revealFailed', { error: error && error.message ? error.message : error }), 'danger');
   }
 }
 
 async function copyText(text) {
   if (!text) {
-    toast('路径为空，无法复制', 'warn');
+    toast(t('main:toast.copyEmpty'), 'warn');
     return;
   }
   try {
     await navigator.clipboard.writeText(text);
-    toast('路径已复制', 'ok');
+    toast(t('main:toast.copyOk'), 'ok');
   } catch (error) {
     try {
       const area = document.createElement('textarea');
@@ -2418,9 +2508,9 @@ async function copyText(text) {
       area.select();
       document.execCommand('copy');
       area.remove();
-      toast('路径已复制', 'ok');
+      toast(t('main:toast.copyOk'), 'ok');
     } catch (fallbackError) {
-      toast('复制失败，请手动选择路径', 'danger');
+      toast(t('main:toast.copyFailed'), 'danger');
     }
   }
 }
@@ -2468,7 +2558,7 @@ function comboFromEvent(event) {
 async function commitRecording() {
   if (!state.recording || state.committing) return;
   if (!state.recordedCombo) {
-    toast('请先按下一个非修饰键', 'warn');
+    toast(t('main:toast.hotkeyNeedKey'), 'warn');
     return;
   }
   const actionId = state.recording;
@@ -2479,20 +2569,20 @@ async function commitRecording() {
     if (result && result.ok === false) {
       state.recording = null;
       state.recordedCombo = null;
-      state.hotkeyError = { actionId, message: result.reason || '快捷键设置失败' };
+      state.hotkeyError = { actionId, message: result.reason || t('main:toast.hotkeyFailed') };
       render({ preserveScroll: true });
-      toast(result.reason || '快捷键设置失败', 'warn');
+      toast(result.reason || t('main:toast.hotkeyFailed'), 'warn');
       return;
     }
     state.recording = null;
     state.recordedCombo = null;
     state.hotkeyError = null;
     await refresh({ silent: true });
-    toast('快捷键已更新', 'ok');
+    toast(t('main:toast.hotkeyUpdated'), 'ok');
   } catch (error) {
-    state.hotkeyError = { actionId, message: error && error.message ? error.message : '快捷键设置失败' };
+    state.hotkeyError = { actionId, message: error && error.message ? error.message : t('main:toast.hotkeyFailed') };
     render({ preserveScroll: true });
-    toast('快捷键设置失败', 'danger');
+    toast(t('main:toast.hotkeyFailed'), 'danger');
   } finally {
     state.committing = false;
   }
@@ -2502,14 +2592,14 @@ async function resetHotkey(actionId) {
   try {
     const result = await invoke('reset_hotkey', { actionId });
     if (result && result.ok === false) {
-      toast(result.reason || '重置失败', 'warn');
+      toast(result.reason || t('main:toast.resetFailed'), 'warn');
       return;
     }
     state.hotkeyError = null;
     await refresh({ silent: true });
-    toast('已恢复默认快捷键', 'ok');
+    toast(t('main:toast.hotkeyReset'), 'ok');
   } catch (error) {
-    toast(`重置失败：${error && error.message ? error.message : error}`, 'danger');
+    toast(t('main:toast.resetFailedWith', { error: error && error.message ? error.message : error }), 'danger');
   }
 }
 
@@ -2526,7 +2616,7 @@ function closeMenu() {
  * Promise-based confirm dialog. `window.confirm` blocks the WebView message
  * loop (and every pending IPC promise with it), so use an in-page modal.
  */
-function confirmDialog({ title, message, confirmLabel = '确定', cancelLabel = '取消', danger = false }) {
+function confirmDialog({ title, message, confirmLabel = t('main:modal.confirm'), cancelLabel = t('common:cancel'), danger = false }) {
   return new Promise((resolve) => {
     const backdrop = document.createElement('div');
     backdrop.className = 'modal-backdrop';
@@ -2567,18 +2657,18 @@ function openToolMenu(button, tool) {
   closeMenu();
   menuToolId = tool.id;
   const items = [
-    { action: 'close', label: '关闭', icon: 'x' },
-    { action: 'reveal', label: '打开所在目录', icon: 'folder' },
-    { action: 'toggle', label: tool.enabled ? '禁用' : '启用', icon: tool.enabled ? 'pause' : 'check' }
+    { action: 'close', label: t('common:close'), icon: 'x' },
+    { action: 'reveal', label: t('main:tools.menu.reveal'), icon: 'folder' },
+    { action: 'toggle', label: tool.enabled ? t('main:tools.menu.disable') : t('main:tools.menu.enable'), icon: tool.enabled ? 'pause' : 'check' }
   ];
-  if (tool.source !== 'official') items.push({ separator: true }, { action: 'uninstall', label: '卸载', icon: 'trash', danger: true });
+  if (tool.source !== 'official') items.push({ separator: true }, { action: 'uninstall', label: t('main:tools.menu.uninstall'), icon: 'trash', danger: true });
 
   menuEl = document.createElement('div');
   menuEl.className = 'ctx-menu';
   menuEl.setAttribute('role', 'menu');
   menuEl.innerHTML = items.map((item) => item.separator
     ? '<div class="ctx-sep"></div>'
-    : `<button type="button" class="ctx-item${item.danger ? ' danger' : ''}" role="menuitem" data-menu-action="${item.action}" data-menu-tool="${escapeAttr(tool.id)}">${icon(item.icon, 14)}<span>${item.label}</span></button>`
+    : `<button type="button" class="ctx-item${item.danger ? ' danger' : ''}" role="menuitem" data-menu-action="${item.action}" data-menu-tool="${escapeAttr(tool.id)}">${icon(item.icon, 14)}<span>${escapeHtml(item.label)}</span></button>`
   ).join('');
   document.body.appendChild(menuEl);
 
@@ -2599,9 +2689,9 @@ async function handleMenuAction(action, id) {
   if (action === 'close') {
     try {
       await invoke('close_tool', { id });
-      toast(`已关闭「${tool.name}」`, 'ok');
+      toast(t('main:toast.toolClosed', { name: tool.name }), 'ok');
     } catch (error) {
-      toast('关闭失败', 'danger');
+      toast(t('main:toast.closeFailed'), 'danger');
     }
     return;
   }
@@ -2612,30 +2702,30 @@ async function handleMenuAction(action, id) {
   if (action === 'toggle') {
     try {
       const result = await invoke('set_tool_enabled', { id, enabled: !tool.enabled });
-      if (result && result.ok === false) throw new Error(result.error || '操作失败');
+      if (result && result.ok === false) throw new Error(result.error || t('main:toast.actionFailed'));
       tool.enabled = !tool.enabled;
       render({ preserveScroll: true });
-      toast(tool.enabled ? `已启用「${tool.name}」` : `已禁用「${tool.name}」`, 'ok');
+      toast(tool.enabled ? t('main:toast.toolEnabled', { name: tool.name }) : t('main:toast.toolDisabled', { name: tool.name }), 'ok');
     } catch (error) {
-      toast(`操作失败：${error && error.message ? error.message : error}`, 'danger');
+      toast(t('main:toast.actionFailedWith', { error: error && error.message ? error.message : error }), 'danger');
     }
     return;
   }
   if (action === 'uninstall') {
     const confirmed = await confirmDialog({
-      title: `卸载「${tool.name}」`,
-      message: '工具目录将被删除，已保存的工具数据不会保留。此操作不可撤销。',
-      confirmLabel: '卸载',
+      title: t('main:modal.uninstallTitle', { name: tool.name }),
+      message: t('main:modal.uninstallMessage'),
+      confirmLabel: t('main:tools.menu.uninstall'),
       danger: true
     });
     if (!confirmed) return;
     try {
       const result = await invoke('uninstall_tool', { id });
-      if (result && result.ok === false) throw new Error(result.error || '卸载失败');
-      toast(`已卸载「${tool.name}」`, 'ok');
+      if (result && result.ok === false) throw new Error(result.error || t('main:toast.uninstallFailed'));
+      toast(t('main:toast.uninstalled', { name: tool.name }), 'ok');
       await refresh({ silent: true });
     } catch (error) {
-      toast(`卸载失败：${error && error.message ? error.message : error}`, 'danger');
+      toast(t('main:toast.uninstallFailedWith', { error: error && error.message ? error.message : error }), 'danger');
     }
   }
 }
@@ -2719,7 +2809,7 @@ async function onClick(event) {
   }
 
   const refreshButton = target.closest('[data-refresh]');
-  if (refreshButton) { await refresh(); toast('已刷新', 'ok'); return; }
+  if (refreshButton) { await refresh(); toast(t('main:toast.refreshed'), 'ok'); return; }
 
   const retryButton = target.closest('[data-retry]');
   if (retryButton) { state.loading = true; state.error = null; render(); await refresh(); return; }
@@ -2748,13 +2838,19 @@ async function onClick(event) {
   const side = target.closest('[data-ballside]');
   if (side) { await handleBallSide(side.dataset.ballside); return; }
 
+  const themeChoice = target.closest('[data-theme-choice]');
+  if (themeChoice) { await handleThemeChoice(themeChoice.dataset.themeChoice); return; }
+
+  const localeChoice = target.closest('[data-locale-choice]');
+  if (localeChoice) { await handleLocaleChoice(localeChoice.dataset.localeChoice); return; }
+
   const restart = target.closest('[data-restart]');
   if (restart) {
     try {
       await invoke('restart_app');
-      toast(host && host.isHosted ? '正在重启工具箱…' : '浏览器预览：已模拟重启', 'info');
+      toast(host && host.isHosted ? t('main:toast.restarting') : t('main:toast.restartPreview'), 'info');
     } catch (error) {
-      toast('重启失败', 'danger');
+      toast(t('main:toast.restartFailed'), 'danger');
     }
     return;
   }
@@ -2763,9 +2859,9 @@ async function onClick(event) {
   if (quit) {
     try {
       await invoke('quit_app');
-      toast(host && host.isHosted ? '工具箱已退出' : '浏览器预览：已模拟退出', 'info');
+      toast(host && host.isHosted ? t('main:toast.quitted') : t('main:toast.quitPreview'), 'info');
     } catch (error) {
-      toast('退出失败', 'danger');
+      toast(t('main:toast.quitFailed'), 'danger');
     }
   }
 }
@@ -2782,7 +2878,7 @@ function onInput(event) {
     const value = Math.min(QUICK_MENU_MAX, Math.max(1, Number(target.value) || 1));
     target.style.setProperty('--fill', `${Math.round(((value - 1) / (QUICK_MENU_MAX - 1)) * 100)}%`);
     const output = $('#qmCountOut');
-    if (output) output.textContent = `${value} 个`;
+    if (output) output.textContent = t('main:quickMenu.countValue', { count: value });
     // Live-preview the new icon count without touching the saved config.
     quickDemo.countOverride = value;
     mountQuickDemo();
@@ -2850,28 +2946,205 @@ function bindWindowControls() {
   minimize.addEventListener('click', async () => {
     try {
       if (!host || !host.isHosted) {
-        toast('浏览器预览：已模拟最小化', 'info');
+        toast(t('main:toast.minimizePreview'), 'info');
         return;
       }
       const result = host && typeof host.minimizeWindow === 'function'
         ? await host.minimizeWindow()
         : { ok: false };
-      if (!result || result.ok === false) toast('当前宿主未提供最小化命令', 'warn');
+      if (!result || result.ok === false) toast(t('main:toast.minimizeUnavailable'), 'warn');
     } catch (error) {
-      toast('最小化失败', 'danger');
+      toast(t('main:toast.minimizeFailed'), 'danger');
     }
   });
   close.addEventListener('click', async () => {
     try {
       await invoke('close_window', { label: 'main' });
-      if (!host || !host.isHosted) toast('浏览器预览：已模拟关闭窗口', 'info');
+      if (!host || !host.isHosted) toast(t('main:toast.closePreview'), 'info');
     } catch (error) {
-      toast('关闭失败', 'danger');
+      toast(t('main:toast.closeFailed'), 'danger');
     }
   });
 }
 
+/* --- 11. Theme -------------------------------------------------------------- */
+
+/** Word-list label of a resolved theme (also used inside the hints below). */
+function themeLabel(theme) {
+  return theme === 'light' ? t('main:settings.theme.light') : t('main:settings.theme.dark');
+}
+
+/** Re-point the token block; the value comes from the host `theme` event. */
+function applyTheme(theme) {
+  if (theme !== 'light' && theme !== 'dark') return;
+  const root = document.documentElement;
+  root.setAttribute('data-theme', theme);
+  root.style.colorScheme = theme;
+}
+
+/**
+ * The theme Windows is on. Inside the host that is the resolved theme from
+ * `get_state` — `env.theme`, which equals `env.systemTheme` while the config
+ * follows the system (the dev bridge mirrors the same fields). A plain browser
+ * (`pnpm dev`) has no injected `__TOOLBOX_ENV__`, and the bridge's mock env is a
+ * fixed value, so there the media query is the only honest source.
+ */
+function systemThemeNow() {
+  if (window.__TOOLBOX_ENV__) {
+    const env = (state.data && state.data.env) || {};
+    if (env.theme === 'light' || env.theme === 'dark') return env.theme;
+    if (env.systemTheme === 'light' || env.systemTheme === 'dark') return env.systemTheme;
+  }
+  return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+/** Resolve a config choice (`system` / `light` / `dark`) to a theme to paint. */
+function themeForChoice(choice) {
+  if (choice === 'light' || choice === 'dark') return choice;
+  return systemThemeNow();
+}
+
+/** Hint under the theme switch: where the current colours come from. */
+function themeHintText(choice) {
+  if (choice === 'light' || choice === 'dark') return t('main:settings.theme.locked', { name: themeLabel(choice) });
+  return t('main:settings.theme.following', { name: themeLabel(systemThemeNow()) });
+}
+
+/**
+ * Persist a theme choice. The colour flip is optimistic (the token block is
+ * repainted before the round trip), the host then either applies it to every
+ * window — which pushes a `theme` event this page already reflects — or rejects
+ * the patch, in which case the previous choice is restored.
+ */
+async function handleThemeChoice(choice) {
+  if (choice !== 'system' && choice !== 'light' && choice !== 'dark') return;
+  const config = state.data.config;
+  if (state.saving || config.theme === choice) return;
+  const previous = config.theme;
+  const previousEnv = state.data.env;
+  config.theme = choice;
+  applyTheme(themeForChoice(choice));
+  state.saving = true;
+  render({ preserveScroll: true });
+  try {
+    const result = await invoke('save_config', { patch: { theme: choice } });
+    if (result && result.ok === false) throw new Error(result.error || t('main:toast.saveFailed'));
+    if (result && result.env) state.data.env = { ...(state.data.env || {}), ...result.env };
+    toast(t('main:toast.saved'), 'ok');
+  } catch (error) {
+    config.theme = previous;
+    state.data.env = previousEnv;
+    applyTheme(themeForChoice(previous));
+    console.warn('[toolbox] theme change rejected', error);
+    toast(t('main:toast.saveFailedWith', { error: error && error.message ? error.message : error }), 'danger');
+  } finally {
+    state.saving = false;
+    render({ preserveScroll: true });
+  }
+}
+
+/* --- 11b. Language ---------------------------------------------------------- */
+
+/** Word-list label of a locale code; the labels are endonyms, so they never move. */
+function localeLabel(code) {
+  return code === 'en-US' ? t('main:settings.language.en') : t('main:settings.language.zh');
+}
+
+/**
+ * The locale a config choice paints. `system` asks the host's resolved
+ * environment (`env.systemLocale`, mirrored into `env.locale` while the config
+ * follows the system); a plain browser preview has no injected env there, so the
+ * language that is already loaded wins.
+ */
+function localeForChoice(choice) {
+  if (choice === 'zh-CN' || choice === 'en-US') return choice;
+  const env = (state.data && state.data.env) || {};
+  if (env.systemLocale === 'zh-CN' || env.systemLocale === 'en-US') return env.systemLocale;
+  if (env.locale === 'zh-CN' || env.locale === 'en-US') return env.locale;
+  return i18n && i18n.language === 'en-US' ? 'en-US' : 'zh-CN';
+}
+
+/** Hint under the language switch: following Windows (and what it resolved to), or locked. */
+function localeHintText(choice) {
+  if (choice === 'zh-CN' || choice === 'en-US') return t('main:settings.language.locked', { name: localeLabel(choice) });
+  const env = (state.data && state.data.env) || {};
+  const current = env.locale === 'zh-CN' || env.locale === 'en-US' ? env.locale : localeForChoice('system');
+  return t('main:settings.language.following', { name: localeLabel(current) });
+}
+
+/**
+ * Persist a language choice. The word-list switch is optimistic — the page
+ * repaints in the new language before the round trip — and the host then either
+ * broadcasts `locale`, which i18n-core already turns into `changeLanguage` (this
+ * handler is idempotent on that), or rejects the patch, in which case the
+ * previous choice and language are restored.
+ */
+async function handleLocaleChoice(choice) {
+  if (choice !== 'system' && choice !== 'zh-CN' && choice !== 'en-US') return;
+  if (!state.data || state.saving) return;
+  const config = state.data.config;
+  const previous = config.locale || 'system';
+  if (previous === choice) return;
+  const previousEnv = state.data.env;
+  const previousLanguage = i18n && i18n.language;
+  config.locale = choice;
+  if (i18n) i18n.changeLanguage(localeForChoice(choice));
+  state.saving = true;
+  render({ preserveScroll: true });
+  try {
+    const result = await invoke('save_config', { patch: { locale: choice } });
+    if (result && result.ok === false) throw new Error(result.error || t('main:toast.saveFailed'));
+    if (result && result.env) state.data.env = { ...(state.data.env || {}), ...result.env };
+    toast(t('main:toast.saved'), 'ok');
+  } catch (error) {
+    config.locale = previous;
+    state.data.env = previousEnv;
+    if (i18n && previousLanguage) i18n.changeLanguage(previousLanguage);
+    console.warn('[toolbox] locale change rejected', error);
+    toast(t('main:toast.saveFailedWith', { error: error && error.message ? error.message : error }), 'danger');
+  } finally {
+    state.saving = false;
+    render({ preserveScroll: true });
+  }
+}
+
+// The host injects `__hostOn`/`__hostEmit` (windows::panel::host_bootstrap) and
+// re-emits `theme` into every window after a switch; without a host (pnpm dev)
+// the inline <head> script is the only theme source. Idempotent on purpose: the
+// event and the optimistic flip both write the same attribute.
+if (window.__hostOn) window.__hostOn('theme', applyTheme);
+
+/**
+ * Paint the chrome that lives in the static markup: the `data-i18n` slots, the
+ * document title, `<html lang>` and the two icon-only window buttons (they carry
+ * no text, so their accessible name has to be set here). Runs once at boot and
+ * again after every language switch.
+ */
+function localizeChrome() {
+  translateDom();
+  document.title = t('main:title');
+  document.documentElement.lang = i18n ? i18n.language : 'zh-CN';
+  const minimize = $('#win-min');
+  const close = $('#win-close');
+  if (minimize) minimize.setAttribute('aria-label', t('main:shell.minimize'));
+  if (close) close.setAttribute('aria-label', t('common:close'));
+}
+
 async function boot() {
+  // Word list first, so the very first render is already in the right language.
+  // A live `locale` event arrives as `languageChanged`: re-translate the static
+  // markup and repaint the active tab (tool/hotkey copy comes from the host).
+  i18n = await setupMainI18n();
+  localizeChrome();
+  i18n.on('languageChanged', () => {
+    localizeChrome();
+    render({ preserveScroll: true });
+    // Tool names, descriptions and action titles (and the hotkey table) are
+    // localised by the host and arrive through `get_state`, so repainting alone
+    // would keep the previous language's data. Re-fetch, then repaint.
+    refresh({ silent: true }).catch(() => {});
+  });
+
   render();
   document.addEventListener('click', onClick);
   document.addEventListener('keydown', onRecordKey, true);
@@ -2907,7 +3180,7 @@ boot().catch((error) => {
   state.loading = false;
   state.error = error && error.message ? error.message : String(error);
   render();
-  toast('工具箱启动失败', 'danger');
+  toast(t('main:toast.bootFailed'), 'danger');
 });
 </script>
 </body>

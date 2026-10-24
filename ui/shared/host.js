@@ -22,8 +22,8 @@ const MOCK = {
   officialToolsDir: 'D:\\Toolbox\\tools',
   installedToolsDir: 'D:\\Toolbox\\data\\tools',
   config: {
-    locale: 'zh-CN',
-    theme: 'dark',
+    locale: 'system',
+    theme: 'system',
     ballSide: 'right',
     ballY: 0.62,
     ballDocked: true,
@@ -38,6 +38,22 @@ const MOCK = {
     panelHotkey: 'Alt+Space',
     autostart: false,
     closeToTray: true
+  },
+  // Mirrors `env::EnvDto` in src-tauri/src/env.rs. The real host resolves these
+  // from Windows; the mock pretends the OS is light with a zh-CN display language.
+  env: {
+    theme: 'light',
+    locale: 'zh-CN',
+    systemTheme: 'light',
+    systemLocale: 'zh-CN',
+    highContrast: false,
+    systemLanguageTag: 'zh-CN',
+    themeChoices: ['system', 'light', 'dark'],
+    localeChoices: ['system', 'zh-CN', 'en-US'],
+    availableLocales: ['zh-CN', 'en-US'],
+    // A browser has no window compositor to add the acrylic backdrop, so the
+    // preview keeps the opaque panel. Run the app to see the frosted surface.
+    glass: false
   },
   tools: [
     {
@@ -436,9 +452,25 @@ function mockInvoke(cmd, args = {}) {
     case 'reset_hotkey':
       return resetMockHotkey(args.actionId);
 
-    case 'save_config':
-      mock.config = { ...mock.config, ...(args.patch || {}) };
-      return { ok: true };
+    case 'save_config': {
+      const patch = args.patch || {};
+      mock.config = { ...mock.config, ...patch };
+      // Keep the mock's resolved environment in sync so the settings page shows
+      // the same "follow system (currently …)" hint the real host does.
+      if (patch.theme) {
+        mock.env = {
+          ...mock.env,
+          theme: patch.theme === 'system' ? mock.env.systemTheme : patch.theme
+        };
+      }
+      if (patch.locale) {
+        mock.env = {
+          ...mock.env,
+          locale: patch.locale === 'system' ? mock.env.systemLocale : patch.locale
+        };
+      }
+      return { ok: true, env: clone(mock.env) };
+    }
 
     case 'reveal_path': {
       const paths = {

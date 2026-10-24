@@ -1,0 +1,10 @@
+{
+  "appName": "Toolbox",
+  "openMain": "Main window",
+  "refresh": "Refresh",
+  "close": "Close",
+  "cancel": "Cancel",
+  "open": "Open",
+  "notSet": "Not set",
+  "openFolder": "Open folder"
+}

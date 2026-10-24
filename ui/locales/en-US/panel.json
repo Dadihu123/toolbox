@@ -1,0 +1,23 @@
+{
+  "title": "Toolbox panel",
+  "search": {
+    "placeholder": "Search tools or actions…"
+  },
+  "group": {
+    "results": "Results · {{count}}",
+    "all": "All tools"
+  },
+  "row": {
+    "action": "Action · {{tool}}"
+  },
+  "badge": {
+    "installed": "Third-party"
+  },
+  "empty": {
+    "noMatch": "No matching tool or action",
+    "noTools": "No tools available yet"
+  },
+  "error": {
+    "load": "Failed to load: {{error}}"
+  }
+}
