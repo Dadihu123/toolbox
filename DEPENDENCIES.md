@@ -17,6 +17,29 @@ on any machine with the VC++ redistributable, which is standard on Windows 10/11
 | Rust | 1.96 (edition 2021, `rust-version = 1.80`) |
 | MSVC build tools | Visual Studio 2022 (x64) |
 | Windows SDK | 10.0.26100 |
+| Node.js | 25.8 (Vite 8 needs ≥ 20.19) |
+| pnpm | 11.8 (`pnpm-lock.yaml` is committed) |
+
+Since 0.2.0 the host UI is a Vite build and its output is embedded in the executable at
+compile time (`build.frontendDist` → `../ui/dist`), so the order is always:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm build                 # -> ui/dist
+cd src-tauri; cargo build  # embeds ui/dist
+```
+
+`scripts/make-portable.ps1` does both, in that order.
+
+## Frontend packages
+
+| Package | Purpose |
+| --- | --- |
+| `vite` 8 | multi-page build of `ui/panel.html` + `ui/main.html`; `pnpm dev` serves them with the mock host bridge |
+| `i18next` 25 | host UI translations (`ui/locales/<locale>/{common,panel,main}.json`) |
+
+`.npmrc` sets `auto-install-peers=false`: i18next's optional `typescript` peer (~22 MB) is
+not needed by anything here.
 
 ## Crates
 
@@ -34,7 +57,10 @@ The full graph is pinned in `src-tauri/Cargo.lock`. Direct dependencies:
 | `base64` | file payloads across the bridge |
 | `uuid` | staging directory names during tool install |
 | `zip` | third-party tool installation |
-| `windows` | Win32 calls for the native floating ball (layered window, DPI, menus) |
+| `resvg` | rasterising tool `icon.svg` files into window/taskbar icons |
+| `rust-i18n` 4 | native word lists (`src-tauri/locales/*.json`): tray/ball menus, permission labels, host error strings |
+| `webview2-com` **=0.39.1** | pinned to wry 0.57's own version; used for `ICoreWebView2_13::Profile().SetPreferredColorScheme` (runtime theme switch) |
+| `windows` | Win32 calls for the native floating ball (layered window, DPI, menus), the registry, `GetUserPreferredUILanguages` and `HIGHCONTRASTW` |
 
 ## Licences
 

@@ -13,6 +13,10 @@
 | 3 | WebView2 依赖 | 接受（见 §2.5） | 本机已装 155.0.4283.62，零安装成本 |
 | 4 | 快捷键粒度 | **绑到工具内动作** | 需要 Action Registry + 动态注册 + 窗口未开时的延迟派发 |
 | 5 | 工具来源 | **要能装别人的** | 架构从"iframe 同源增强"改为"**每工具独立 webview + 能力沙箱 + 安装授权**"，这是 v1.1 最大的改动 |
+| 6 | 环境（0.2.0） | **宿主做单一环境服务**：主题三态 `system/light/dark`、语言 `system/zh-CN/en-US`；Windows 注册表/`GetUserPreferredUILanguages` 解析，`WM_SETTINGCHANGE` 实时跟随；受控范围内只覆盖宿主窗口与工具标题栏，球与快捷扇不动 | `config.json` v2；所有窗口创建时必须显式传 `Some(resolved)`（WebView2 profile 全 app 共享，后创建者会把主题盖上去，见 §1 的结构说明）；工具通过 Bridge v2 的 `theme`/`locale` 事件获知变化 |
+| 7 | 宿主 UI 构建（0.2.0） | **Vite 多页 + pnpm**，`ui/` 仍是源码根，产物 `ui/dist`，`frontendDist` 指向它；不引 React/TS，不迁主窗口框架 | 面板保持零框架与首屏预算；`make-portable.ps1` 先 `pnpm build` 再 `cargo build`；**不设 `devUrl`**（会让 release 构建嵌入空资产表） |
+| 8 | i18n（0.2.0） | 前端 **i18next**（命名空间 common/panel/main，仅加载本页所需）+ Rust **rust-i18n 4**（`native.*`）；词表所有权分离；`pnpm i18n:check` 与 `cargo test` 各自校验 | zh-CN 为源语言与回退；en-US 全量对齐；`pnpm dev?lng=en-XA` 伪语言抓硬编码 |
+| 9 | 视觉收尾（0.2.0） | 面板做**真磨砂**（窗口级 Acrylic + 圆角裁剪），并把饱和描边色/遮罩/提示阴影提升为共享 token | 见 §4.2；`ui/shared/theme.css` 的 `--*-line`、`--scrim`、`--shadow-toast`；小写字母 .02–.04 的透明度差异被合并，暗色视觉不变 |
 
 因 #5，原方案的"单 Tool Host + iframe"被**整体废弃**：同源 iframe 不构成安全边界，第三方工具能碰宿主特权。现在每个工具一个窗口、一个独立 renderer、一套最小能力白名单。
 
@@ -207,7 +211,7 @@ Ctrl+Alt+Z（绑定到 tool.sprite-align.realign）
 
 | 项 | 规格 |
 | --- | --- |
-| 尺寸 | 440×560，圆角 14，半透明毛玻璃（`transparent` + Win11 Acrylic 可选） |
+| 尺寸 | 460×560，圆角 14，毛玻璃（Win32 Acrylic + 等半径窗口区域，见下） |
 | 打开方式 | 点圆球 → 球旁边弹出（贴边时向内侧展开）；按热键 → **鼠标位置**弹出（自动避让屏幕边缘） |
 | 内容 | 顶部搜索框（聚焦）；"最近"（4 个）；"全部工具"网格；底部条：主界面 / 设置 / 退出 |
 | 搜索范围 | **工具名 + 工具动作名**（输入"导出"能直接命中 `sprite-align` 的导出动作，Enter 即执行） |
@@ -216,7 +220,17 @@ Ctrl+Alt+Z（绑定到 tool.sprite-align.realign）
 | 生命周期 | 首次打开创建；关闭后**保活 5 分钟**（`tokio::sleep` 一次性任务），之后销毁。重复使用秒开，长期不用不占内存 |
 | 焦点 | 面板**要**抢焦点（搜索框要输入），只有圆球不抢 |
 
-面板与主界面共用一套设计 token（`packages/ui`），但面板是零框架手写页面，主界面是 React。
+面板与主界面共用一套设计 token（`ui/shared/theme.css`），两边都是零框架手写页面。
+
+> **毛玻璃（0.2.0 实装）**：CSS `backdrop-filter` 在透明窗口里没有可模糊的背景（窗口本身
+> 透明，页面背后的 backdrop 是空的），所以模糊只能由窗口合成器提供。
+> 实现 = `SetWindowCompositionAttribute(ACCENT_ENABLE_ACRYLICBLURBEHIND)` + 与 CSS 圆角
+> 同半径的 `SetWindowRgn` 裁剪（不加区域的话亚克力会把四角补成直角），见
+> `src-tauri/src/windows/glass.rs`。应用成功后宿主在 `get_state` 的 `env.glass` 里报 `true`，
+> 面板据此切到半透明表面（`[data-glass="on"]` 覆写 `--panel-bg` / `--panel-foot`）；
+> 失败就保持不透明的 0.1.0 外观——半透明而没有模糊会把桌面糊在面板上，不可读。
+> 主题切换要重设模糊的 tint（`panel::refresh_glass`），它烘焙在窗口属性里而不是 CSS 里。
+> 排障开关：`TOOLBOX_PANEL_GLASS=off|accent|full`。
 
 ### 4.3 交互边界（避免和 PixPin 抢键）
 
@@ -242,13 +256,24 @@ sprite-align/
 
 ### 5.2 `tool.json` v1
 
+> 0.2.0 起 `bridgeVersion` 接受 **1 和 2**（v1 工具用 v2 shim 照常加载，>2 明确拒绝），并新增
+> 可选的内联多语言字段 `locales`；`manifestVersion` 仍为 1。实现见
+> `src-tauri/src/registry.rs`（`Manifest::name_for` / `search_text`）与 §5.6。
+
 ```json
 {
   "manifestVersion": 1,
-  "bridgeVersion": 1,
+  "bridgeVersion": 2,
   "id": "sprite-align",
   "name": "序列帧对齐",
   "description": "切分 sprite sheet、识别帧内容、锚点对齐、导出 ZIP",
+  "locales": {
+    "en-US": {
+      "name": "Sprite Align",
+      "description": "Slice sprite sheets, align anchors, export PNG / ZIP",
+      "actions": { "open": "Open Sprite Align", "export-zip": "Export as ZIP" }
+    }
+  },
   "version": "1.2.0",
   "author": "yhmr",
   "homepage": "https://github.com/...",
@@ -316,17 +341,23 @@ sprite-align/
 - `pnpm create toolbox-tool` 脚手架 + `@toolbox/tool-sdk`（TS 类型 + shim 类型 + 调试工具）。
 - 模板内置 `bridge` 的类型声明，所以工具侧写 `window.__toolbox.files.save(...)` 有完整补全。
 
-### 5.6 Bridge API v1
+### 5.6 Bridge API v2
+
+> 0.2.0 起 shim 声明 `version: 2`，并增加了环境字段与两个事件。**v1 工具无需改动**：
+> v2 是 v1 的超集，shim 从不移除 v1 成员；`tool.json` 的 `bridgeVersion` 1 与 2 都接受。
+> 工具页面不要依赖 `navigator.language` 或 `<html lang>`——运行期切换语言时它们不变，
+> 以 `__toolbox.locale` 与 `locale` 事件为准。shim 也不注入 `data-theme`、不改 `lang`。
 
 注入的 shim（`initialization_script`，工具源码零改动）：
 
 ```ts
 interface ToolboxBridge {
-  readonly version: 1;
+  readonly version: 2;                      // v1 工具照常用，只是看到 2
   readonly toolId: string;
   readonly mode: "hosted" | "standalone";   // standalone 时全部空实现，工具照常工作
-  readonly theme: "dark" | "light";
-  readonly locale: string;
+  readonly theme: "dark" | "light";         // 生效主题（宿主可能显式锁定）
+  readonly locale: "zh-CN" | "en-US";       // 生效语言（权威值）
+  readonly availableLocales: string[];      // ["zh-CN", "en-US"]
 
   files: {
     open(opts?: { accept?: string[]; multiple?: boolean }): Promise<OpenedFile[]>;
@@ -342,8 +373,12 @@ interface ToolboxBridge {
 }
 ```
 
+- 事件 payload：`theme` 是 `"dark" | "light"`，`locale` 是 BCP-47 串（`"zh-CN" | "en-US"`）。
 - 每次调用都带 `{method, args}` → Rust 侧统一 `bridge::call` 命令 → 校验（label→toolId、权限、参数 schema）→ 执行。
-- `bridgeVersion` 不兼容 → 拒绝加载并给明确原因（"此工具需要 Bridge v2，请升级工具箱"）。
+- `bridgeVersion` 高于 2 → 拒绝加载并给明确原因（"需要 Bridge v3，本工具箱仅支持到 v2"）；
+  1 与 2 都按 v2 shim 加载。
+- 宿主切换语言时：已开工具窗口的标题由 Rust 重新设置（`tools::refresh_titles`），
+  `locale` 事件送达页面；工具自行决定是否重绘。
 
 ---
 
@@ -431,7 +466,9 @@ Toolbox/                      ← 整个目录可拷走
 
 ### 7.4 配置
 
-- JSON + `configVersion`，启动顺序迁移，迁移前写 `backups/`。
+- JSON + `CONFIG_VERSION`（0.2.0 起为 **2**），加载时迁移；v1 的 `theme`/`locale` 只是从未暴露的
+  占位值，迁移一律重置为 `"system"`（实测见 `src-tauri/src/state.rs` 的 `migrate` 测试）。
+- 归一化：非法 `theme`/`locale` 值退回 `"system"`；允许手改（容忍 UTF-8 BOM）。
 - 原子写：`*.tmp` → `fsync` → `rename`；debounce 500ms。
 - 写失败 → 只读模式 + 顶部提示，不反复弹错。
 - 不加密不混淆（个人工具，可读性优先）。

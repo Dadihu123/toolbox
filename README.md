@@ -3,10 +3,12 @@
 Portable personal toolset host for Windows. A floating ball sits at the screen edge; a
 hotkey opens a search panel; each tool runs in its own sandboxed webview.
 
-> Status: 0.1.0 milestone. Ball, panel, main window, hotkey registry, tool sandbox/bridge,
+> Status: 0.2.0 milestone. Ball, panel, main window, hotkey registry, tool sandbox/bridge,
 > reviewed installs, runtime actions and packaging are implemented and verified end to end.
-> `scripts/make-portable.ps1` produces the portable folder + zip; `tauri build` produces an
-> NSIS installer.
+> 0.2.0 adds the environment layer: light/dark themes that follow Windows (or are pinned),
+> zh-CN/en-US for both the host UI and tool metadata, a Vite build for the host UI, and
+> Bridge v2. `scripts/make-portable.ps1` produces the portable folder + zip; `tauri build`
+> produces an NSIS installer.
 
 ## What works today
 
@@ -42,6 +44,18 @@ hotkey opens a search panel; each tool runs in its own sandboxed webview.
   routes it to the tool that declares it accepts that file type (falling back to the last
   used tool), delivered as a `files-dropped` event once the page reports ready.
 - **Portable data** — everything under `<exe>/data`, including the WebView2 profile.
+- **Theme** — light and dark token sets for the panel, the main window and every tool
+  window's native title bar. Defaults to following Windows, and keeps following it live
+  (`WM_SETTINGCHANGE` → the ball's window procedure re-reads the registry and re-tints
+  every open webview). Settings → 外观 can pin 浅色 or 深色; the caption bar, the page
+  tokens and `prefers-color-scheme` all switch in one step, without a reload. The search
+  panel sits on a real acrylic backdrop (window-level blur; it falls back to the opaque
+  panel when the compositor refuses). The floating ball and the hover fan are unchanged by
+  design.
+- **Language** — zh-CN (source) and en-US, following the Windows display language by
+  default and pinnable in Settings. The host UI, the tray/ball menus, tool window titles,
+  the install review dialog and the permission labels all follow it; running tools see
+  `__toolbox.locale` (Bridge v2) instead of `navigator.language`.
 
 ## Measured footprint
 
@@ -61,7 +75,9 @@ deliberate exception — it stays warm for 5 minutes after being hidden
 the footprint drops back to idle. Re-measure with `scripts/measure-idle.ps1`; history lives
 in `benchmarks/idle.json`.
 
-Release binary: **4.11 MB**, portable zip: **1.83 MB**, NSIS installer: **1.53 MiB**.
+Release binary: **4.11 MB**, portable zip: **1.83 MB**, NSIS installer: **1.53 MiB**
+(0.1.0 numbers — re-run `scripts/make-portable.ps1` and `measure-idle.ps1` before shipping
+0.2.0: the built host UI and the two word-list sets are embedded in the exe now).
 
 ## Layout
 
@@ -79,27 +95,38 @@ Toolbox/
 │   │   ├── ipc.rs        host-only commands
 │   │   └── windows/      ball (native), panel, main, tool windows
 │   └── capabilities/
-├── ui/
-│   ├── panel.html      search panel (no framework, ~13 KB)
-│   ├── main.html       main window
-│   └── shared/host.js  IPC bridge with a browser-preview mock
+├── ui/                 host UI source (Vite root, built into ui/dist)
+│   ├── panel.html/.js  search panel (no framework, zero-dependency DOM)
+│   ├── main.html       main window (plain HTML + one inline module script)
+│   ├── main-i18n.js, panel-i18n.js   per-page i18next bundles
+│   ├── shared/         theme.css (design tokens), host.js (IPC + browser mock),
+│   │                   i18n-core.js (i18next bootstrap + data-i18n)
+│   └── locales/<locale>/{common,panel,main}.json   webview word lists
 ├── tools/              official tools, shipped as-is
 │   └── sprite-align/
-├── scripts/            portable build + idle baseline
+├── scripts/            portable build, idle baseline, i18n:check
 ├── benchmarks/         measured resource baselines
-└── docs/               design.md (design + decision log)
+└── docs/               design.md (design + decision log), i18n-glossary.md
 ```
 
 At runtime the executable expects `tools/` and `data/` next to itself.
 
 ## Develop
 
+The host UI is a Vite multi-page build (`ui/` → `ui/dist`); the Rust side embeds the
+built output at compile time, so build the UI **before** cargo.
+
 ```powershell
+pnpm install           # once
+pnpm dev               # UI preview at http://127.0.0.1:5173 (mock host bridge)
+pnpm build             # ui/dist — required by cargo build below
+pnpm i18n:check        # word-list checks (key parity, no empty values, no CJK in en-US)
+
 cd src-tauri
-cargo build            # debug build
-cargo test             # unit tests: manifest, permissions, install inspection/commit
+cargo build            # debug build (embeds the current ui/dist)
+cargo test             # unit tests: manifest/bridge versions, permissions, i18n word lists,
+                       # config migration, install inspection/commit
 .\target\debug\toolbox.exe --main      # open the main window directly
-.\target\debug\toolbox.exe --tool sprite-align
 .\target\debug\toolbox.exe --panel     # open the search panel
 .\target\debug\toolbox.exe --quiet     # ball only, no panel
 ```
@@ -110,9 +137,12 @@ cargo test             # unit tests: manifest, permissions, install inspection/c
 Copy-Item ..\tools .\target\debug\ -Recurse -Force
 ```
 
-The UI files are plain HTML and can be opened directly in a browser — `ui/main.html` and
-`ui/panel.html` fall back to mock data when `window.__TAURI_INTERNALS__` is absent, so layout
-work needs no Rust rebuild.
+`pnpm dev` is the UI iteration loop: both pages load `ui/shared/host.js`, which falls back to
+mock data when `window.__TAURI_INTERNALS__` is absent. Opening the HTML files straight from
+disk (`file://`) no longer works — they are ES modules with imports now. Language preview:
+`?lng=en-US`, and `?lng=en-XA` (dev only) wraps every string in `⟦…⟧` so hard-coded copy
+stands out. Theme preview: the page follows the OS unless `window.__TOOLBOX_ENV__` is
+injected, so use the DevTools "emulate prefers-color-scheme" switch.
 
 ## Build a portable release
 
@@ -150,7 +180,7 @@ Resolution order:
 
 ```
 data/
-├── config.json        appearance, ball position, panel hotkey
+├── config.json        theme/locale choice, ball position, panel hotkey (v2)
 ├── hotkeys.json       per-action overrides
 ├── tools.json         install records, enabled flags, granted permissions
 ├── tools/             installed third-party tools
@@ -165,6 +195,11 @@ data/
 Deleting `data/` fully resets the app. The NSIS installer is per-user: it installs under
 `%LOCALAPPDATA%\Toolbox`, so `data/` is created there on first run and is writable.
 
+`config.json` is versioned (`CONFIG_VERSION` 2). v1 files are migrated on load: `theme` and
+`locale` used to be placeholders that were never shown in the UI, so a v1 file is reset to
+`"system"` for both. Hand-edited values outside `system | light | dark` and
+`system | zh-CN | en-US` are normalised to `"system"`, and a UTF-8 BOM is tolerated.
+
 ## Writing a tool
 
 A tool is a static site plus a `tool.json`:
@@ -172,9 +207,17 @@ A tool is a static site plus a `tool.json`:
 ```json
 {
   "manifestVersion": 1,
-  "bridgeVersion": 1,
+  "bridgeVersion": 2,
   "id": "my-tool",
   "name": "我的工具",
+  "description": "一句话说明",
+  "locales": {
+    "en-US": {
+      "name": "My tool",
+      "description": "One line about it",
+      "actions": { "open": "Open my tool" }
+    }
+  },
   "version": "0.1.0",
   "author": "you",
   "entry": "index.html",
@@ -190,6 +233,13 @@ A tool is a static site plus a `tool.json`:
 ```
 
 - `id` must match the directory name and use only lowercase letters, digits, `-`, `_`.
+- `bridgeVersion` 1 and 2 are both accepted; 2 adds the environment fields below to
+  `window.__toolbox`. A v1 tool loads unchanged through the same shim. A manifest asking for
+  a newer bridge is refused with an explicit reason.
+- `locales` is optional and inline (manifestVersion stays 1). Keys are BCP-47 tags; a
+  language may translate any subset, and anything missing falls back to the base
+  `name` / `description` / `actions[].title`. Matching is exact tag → language prefix →
+  base string, so `en-GB` also gets `en-US` text.
 - The tool keeps working when opened directly in a browser; the bridge is a no-op then.
 - Declare only the permissions you need — undeclared capabilities are rejected by the
   host with an explicit error. Third-party installs additionally get only the permissions
@@ -206,11 +256,21 @@ await toolbox.files.save({ suggestedName: 'out.zip', data: base64 });
 await toolbox.files.open({ accept: ['png'], multiple: true });
 await toolbox.data.set('key', value);
 
+// Environment (Bridge v2). `locale` is authoritative: navigator.language does not
+// follow a runtime language switch, and the host may pin a theme that differs
+// from the OS.
+toolbox.version;              // 2
+toolbox.theme;                // 'dark' | 'light'  (initial value)
+toolbox.locale;               // 'zh-CN' | 'en-US' (initial value; update on the event)
+toolbox.availableLocales;     // ['zh-CN', 'en-US']
+
 // Host -> tool events. Actions include manifest actions and runtime ones.
 toolbox.events.on('action', ({ id, action, toolId }) => { /* hotkey fired */ });
 toolbox.events.on('files-dropped', ({ files }) => {
   // files: [{ name, path, size, exists }]
 });
+toolbox.events.on('theme', (theme) => { /* 'dark' | 'light' */ });
+toolbox.events.on('locale', (locale) => { /* 'zh-CN' | 'en-US' */ });
 
 // Register a runtime action; the hotkey exists only while this window is open.
 const unregister = await toolbox.actions.register({

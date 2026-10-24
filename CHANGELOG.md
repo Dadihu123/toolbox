@@ -1,5 +1,100 @@
 # Changelog
 
+## 0.2.0 — unreleased
+
+Environment and language: light/dark themes and zh-CN/en-US across the host UI, the native
+windows and tool metadata.
+
+### Host (Rust)
+
+- **Environment service** (`env.rs`): resolves the effective theme from `Config.theme`
+  (`system | light | dark`) and the display language from `Config.locale`
+  (`system | zh-CN | en-US`). `system` re-reads Windows every time (`AppsUseLightTheme` +
+  high contrast, exactly like tao's `should_use_dark_mode`; `GetUserPreferredUILanguages`
+  with `MUI_LANGUAGE_NAME` for the UI language).
+- **Live theme switching**: one service drives every webview — the native caption via
+  `Window::set_theme`, `prefers-color-scheme` via
+  `ICoreWebView2_13::Profile::SetPreferredColorScheme`. The ball's window procedure handles
+  `WM_SETTINGCHANGE` (not filtered on `lParam`), re-resolves and pushes the result to the
+  panel, the main window and every open tool window; measured ~90 ms, no reload. Switching
+  back to `system` sets both halves explicitly (`None` + `AUTO`).
+- **Shared WebView2 profile discipline**: every window is created with
+  `.theme(Some(resolved))`. Without that, creating a window would stamp the *OS* theme onto
+  the shared profile and undo an explicit light/dark choice (measured, not assumed). Tool
+  windows and the main window also get a matching `background_color`, removing the white
+  first-frame flash.
+- **Config v2** (`state.rs`): `CONFIG_VERSION` 1 → 2. A v1 file resets `theme`/`locale` to
+  `"system"` (the old values were placeholders that were never shown in the UI), unusable
+  values are normalised, and a UTF-8 BOM in a hand-edited file no longer breaks loading.
+- **Native translations** (`rust-i18n`, `src-tauri/locales/*.json`): tray menu, ball
+  right-click menu, built-in action titles, hotkey-table reasons, the install review
+  permission list and host-side error strings. The word list is selected before the tray is
+  built; a language switch re-selects it and rebuilds the tray menu. Tool window titles
+  follow the language too.
+- Word-list rules are enforced by `cargo test` (same keys in both locales, no empty values,
+  no CJK left in en-US).
+
+### Host UI
+
+- **Vite multi-page build**: `ui/` stays the source root and is built into `ui/dist`
+  (`frontendDist: "../ui/dist"`), with `pnpm dev` for the browser preview (mock host
+  bridge) and `pnpm build` required before `cargo build`. No React/TS, no framework added;
+  the panel is still hand-written DOM.
+- **Shared design tokens** (`ui/shared/theme.css`): one dark set (the 0.1.0 look, unchanged)
+  and one light set. `data-theme` is applied before the first paint; a runtime switch
+  re-points that attribute. `prefers-color-scheme` is only a preview fallback, never the
+  driver of the host tokens.
+- **Light theme** for the panel, the main window and the tool captions, with contrast fixes:
+  `--accent-text` (`#1f6fd0`) for accent-coloured text on light surfaces, `--sel-title`
+  instead of hard-coded `#fff`, and a darker light `--fg-faint` (`#5f6877`) that clears
+  4.5:1 on every surface it is used on.
+- **Frosted search panel**: the panel now has a real acrylic backdrop. CSS
+  `backdrop-filter` cannot blur the desktop behind a transparent window, so the blur is
+  applied by the compositor (`SetWindowCompositionAttribute` +
+  `ACCENT_ENABLE_ACRYLICBLURBEHIND`) together with a rounded `SetWindowRgn` at the same
+  radius as the CSS, otherwise the acrylic squares off the corners. The host reports
+  success as `env.glass`; only then does the panel switch to its translucent surface —
+  a see-through panel without blur would be unreadable. The acrylic tint follows theme
+  switches, and `TOOLBOX_PANEL_GLASS=off|accent|full` exists for troubleshooting.
+- Saturated border tints (`--accent-line`, `--ok-line`, `--warn-line`, `--danger-line`
+  with `-strong`/`-soft` variants), the dimming layers (`--scrim`, `--scrim-soft`) and
+  `--shadow-toast` are shared tokens now instead of page-local literals; the alpha
+  differences of .02–.04 between call sites were merged, so the dark look is unchanged.
+- **i18next** for the host UI: namespaces `common` / `panel` / `main`; the panel loads only
+  the two it needs, with resources bundled (no extra round trip on the hotkey path). The
+  settings page gains 主题 (跟随系统/浅色/深色) and 语言 (跟随系统/简体中文/English)
+  controls that apply immediately. `pnpm dev?lng=en-XA` wraps every string in `⟦…⟧` to catch
+  hard-coded copy.
+- Panel search matches tool metadata in **every** shipped language (`searchText`), so "对齐"
+  and "align" find the same tool.
+- Fixed the hotkey capsule (`.kbd-btn`) never drawing its border: the global
+  `button { border: 0 }` reset zeroed the width it only set a colour for.
+
+### Tool contract (Bridge v2)
+
+- `bridgeVersion` 1 and 2 are accepted; anything newer is refused with an explicit reason.
+  A v1 tool loads through the v2 shim unchanged.
+- `window.__toolbox` gains `theme`, `locale` and `availableLocales`, plus `theme` and
+  `locale` events. `navigator.language` still does not follow a runtime language switch —
+  `__toolbox.locale` is authoritative (README + design.md say so).
+- `tool.json` gains an optional inline `locales` object (`name`, `description`,
+  `actions[].title`); matching is exact tag → language prefix → base string, and the base
+  strings stay the fallback. `sprite-align` ships English metadata and asks for
+  `bridgeVersion: 2` (its page body is still Chinese by design).
+
+### Tooling and docs
+
+- `pnpm i18n:check` (`scripts/i18n-check.mjs`): namespace key parity, no empty values, no
+  CJK in en-US, and every `t('ns:key')` / `data-i18n` reference must resolve.
+- `scripts/make-portable.ps1` builds the UI first (`pnpm install --frozen-lockfile`,
+  `pnpm build`) and fails clearly when pnpm is missing or `ui/dist` is absent.
+- New `DEPENDENCIES.md` and `docs/i18n-glossary.md` (terminology lock); README updates
+  (build steps, Bridge v2, `tool.json` example, config v2); design.md decision-log entries
+  #6–#8.
+- `ui/theme-preview.html` — a standalone page (no build, no network) that puts both token
+  sets, the panel and the main window side by side and computes every WCAG contrast live.
+  It was the review artefact for the light palette and stays as living documentation of it.
+
 ## 0.1.0 — unreleased
 
 First packaged build of the host: portable folder/zip plus an NSIS installer.
