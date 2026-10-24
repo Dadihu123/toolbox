@@ -1,10 +1,10 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Toolbox",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "com.yhmr.toolbox",
   "build": {
-    "frontendDist": "../ui"
+    "frontendDist": "../ui/dist"
   },
   "app": {
     "withGlobalTauri": false,

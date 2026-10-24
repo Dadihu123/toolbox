@@ -26,6 +26,25 @@ if ($cargoToml -notmatch '(?m)^version\s*=\s*"([^"]+)"') {
 $version = $Matches[1]
 
 if (-not $SkipBuild) {
+    # The host UI is a Vite multi-page build since 0.2.0 and the Rust side embeds
+    # `ui/dist` at compile time (`build.frontendDist` in tauri.conf.json), so the
+    # UI must be built BEFORE cargo — a stale or missing dist is compiled in.
+    Write-Host 'building UI (pnpm build)...' -ForegroundColor Cyan
+    if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+        throw 'pnpm not found. Install Node.js 20+ and pnpm 10+, then re-run (see DEPENDENCIES.md).'
+    }
+    Push-Location $repo
+    try {
+        pnpm install --frozen-lockfile
+        if ($LASTEXITCODE -ne 0) { throw 'pnpm install failed' }
+        pnpm build
+        if ($LASTEXITCODE -ne 0) { throw 'pnpm build failed' }
+    } finally {
+        Pop-Location
+    }
+    $uiEntry = Join-Path $repo 'ui\dist\panel.html'
+    if (-not (Test-Path $uiEntry)) { throw "missing $uiEntry — the Vite build did not run" }
+
     Write-Host "building ($Configuration)..." -ForegroundColor Cyan
     Push-Location $srcTauri
     try {

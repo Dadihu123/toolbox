@@ -4,9 +4,11 @@
 /src-tauri/target/
 **/*.rs.bk
 
-# Node (UI is plain HTML today, but keep room for a build step)
+# Node — host UI build (Vite). The portable artifacts live in /dist/ (anchored
+# above); the UI build output is /ui/dist/, which `/dist/` does not cover.
 node_modules/
 /dist/
+/ui/dist/
 
 # Local state — never commit a data directory
 /data/
