@@ -136,10 +136,15 @@ fn schedule_destroy(app: &AppHandle) {
     });
 }
 
-/// Injected into every host window: a tiny event bus that the Rust side
-/// dispatches into with `webview.eval`. Avoids depending on the event plugin
-/// (tool windows deliberately have no plugin permissions at all).
-pub const HOST_BOOTSTRAP: &str = r#"(function(){
+/// Injected into every host window: the resolved environment plus a tiny event
+/// bus that the Rust side dispatches into with `webview.eval`. Avoids depending
+/// on the event plugin (tool windows deliberately have no plugin permissions).
+///
+/// `%ENV%` is replaced with a JSON object (`theme`, `locale`,
+/// `availableLocales`); the page reads it from an inline script in `<head>` so
+/// `data-theme` is in place before the first paint.
+const HOST_BOOTSTRAP: &str = r#"(function(){
+  window.__TOOLBOX_ENV__ = %ENV%;
   window.__hostBus = Object.create(null);
   window.__hostEmit = function (type, payload) {
     var cbs = window.__hostBus[type];
@@ -150,6 +155,36 @@ pub const HOST_BOOTSTRAP: &str = r#"(function(){
     (window.__hostBus[type] || (window.__hostBus[type] = [])).push(cb);
   };
 })();"#;
+
+/// Initialisation script for host windows (panel / main) with the current theme
+/// and locale baked in. Built per window, not once: a window created after a
+/// theme switch must start on the new theme.
+pub fn host_bootstrap() -> String {
+    let env = serde_json::json!({
+        "theme": crate::env::resolved_theme().as_str(),
+        "locale": crate::env::resolved_locale(),
+        "availableLocales": crate::env::LOCALES,
+    })
+    .to_string();
+    HOST_BOOTSTRAP.replace("%ENV%", &env)
+}
+
+/// Re-tint the panel's frosted backdrop after a theme switch.
+///
+/// The acrylic tint lives in the window composition attribute, not in the page's
+/// CSS, so changing `data-theme` alone would leave the blur on the old colour.
+pub fn refresh_glass(app: &tauri::AppHandle) {
+    #[cfg(windows)]
+    {
+        use tauri::Manager;
+        if let Some(w) = app.get_webview_window(LABEL) {
+            let dark = crate::env::resolved_theme() == crate::env::Theme::Dark;
+            crate::windows::glass::apply(&w, dark);
+        }
+    }
+    #[cfg(not(windows))]
+    let _ = app;
+}
 
 /// Create the panel on the main thread, one event-loop tick later.
 ///
@@ -232,6 +267,11 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
     };
 
     let (x, y) = anchor(app);
+    // The panel has no native frame (no caption to tint), but the creation theme
+    // still stamps the shared WebView2 profile — without it, opening the panel
+    // after the user picked an explicit theme would reset every other window to
+    // the OS theme.
+    let theme = crate::env::resolved_theme();
     let win = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("panel.html".into()))
         .title("Toolbox Panel")
         .inner_size(460.0, 560.0)
@@ -243,10 +283,21 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
         .skip_taskbar(true)
         .shadow(false)
         .visible(false)
+        .theme(Some(theme.tauri_theme()))
         .data_directory(webview_data_dir())
-        .initialization_script(HOST_BOOTSTRAP)
+        .initialization_script(&host_bootstrap())
         .build()
         .map_err(|e| e.to_string())?;
+
+    // Frosted backdrop (acrylic). Best effort: if the compositor refuses, the
+    // panel keeps its translucent 0.1.0 look. Re-applied on DPI change below,
+    // because the rounded window region is in physical pixels.
+    #[cfg(windows)]
+    {
+        let dark = theme == crate::env::Theme::Dark;
+        let status = crate::windows::glass::apply(&win, dark);
+        crate::logging::write("info", "panel", &format!("glass: {status}"));
+    }
 
     // Click-outside-to-close: the panel is a transient popup, so losing focus to
     // another window means the user moved on. Go through hide() so the ball
@@ -262,6 +313,15 @@ pub fn open(app: &AppHandle) -> Result<(), String> {
     win.on_window_event(move |event| {
         match event {
             tauri::WindowEvent::Focused(true) => mark_focused(),
+            // The acrylic region is physical pixels: re-cut it when the window
+            // lands on a monitor with a different scale factor.
+            #[cfg(windows)]
+            tauri::WindowEvent::ScaleFactorChanged { .. } => {
+                if let Some(w) = handle.get_webview_window(LABEL) {
+                    let dark = crate::env::resolved_theme() == crate::env::Theme::Dark;
+                    crate::windows::glass::apply(&w, dark);
+                }
+            }
             tauri::WindowEvent::Focused(false) => {
                 if let Some(w) = handle.get_webview_window(LABEL) {
                     if !w.is_visible().unwrap_or(false) || shown_recently() {

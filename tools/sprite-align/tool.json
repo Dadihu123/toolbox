@@ -1,9 +1,19 @@
 {
   "manifestVersion": 1,
-  "bridgeVersion": 1,
+  "bridgeVersion": 2,
   "id": "sprite-align",
   "name": "序列帧对齐",
   "description": "切分 sprite sheet、识别帧内容、锚点对齐、导出 PNG / ZIP",
+  "locales": {
+    "en-US": {
+      "name": "Sprite Align",
+      "description": "Slice sprite sheets, align anchors, export PNG / ZIP",
+      "actions": {
+        "open": "Open Sprite Align",
+        "export-zip": "Export as ZIP"
+      }
+    }
+  },
   "version": "1.0.0",
   "author": "yhmr",
   "entry": "sprite-align.html",

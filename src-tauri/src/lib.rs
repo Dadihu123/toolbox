@@ -2,14 +2,20 @@
 
 pub mod actions;
 pub mod bridge;
+pub mod env;
 pub mod icons;
 pub mod install;
 pub mod ipc;
+pub mod l10n;
 pub mod logging;
 pub mod paths;
 pub mod registry;
 pub mod state;
 pub mod windows;
+
+// Native word lists: embedded at compile time from src-tauri/locales/*.json.
+// zh-CN is the source language and the fallback (see l10n.rs).
+rust_i18n::i18n!("locales", fallback = "zh-CN");
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Mutex, OnceLock};
@@ -17,6 +23,9 @@ use std::sync::{Mutex, OnceLock};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Wry};
+
+/// Tray icon id; also how [`apply_locale`] finds the icon to swap its menu.
+const TRAY_ID: &str = "toolbox";
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
 
@@ -79,6 +88,29 @@ pub fn run() {
                     p.official_tools.display()
                 ),
             );
+
+            // Resolve theme/locale once at startup so the log records what every
+            // window will be created with. Windows are created lazily and each one
+            // asks the environment service again, which keeps them consistent even
+            // if the user switches the theme while they are open.
+            let env_snapshot = env::snapshot();
+            logging::write(
+                "info",
+                "env",
+                &format!(
+                    "resolved theme={} locale={} | system theme={} locale={} tag={:?} high_contrast={}",
+                    env_snapshot.theme,
+                    env_snapshot.locale,
+                    env_snapshot.system_theme,
+                    env_snapshot.system_locale,
+                    env_snapshot.system_language_tag,
+                    env_snapshot.high_contrast
+                ),
+            );
+
+            // The native word list must be selected before anything is built from
+            // it — the tray menu below is the first consumer.
+            l10n::set_locale(env::resolved_locale());
 
             // The tray is a convenience, never a hard requirement: failing to add
             // the icon must not stop the app from starting (the floating ball and
@@ -145,11 +177,52 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 }
 
 fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
-    let panel = MenuItem::with_id(app, "panel", "打开工具面板", true, None::<&str>)?;
-    let main = MenuItem::with_id(app, "main", "主界面…", true, None::<&str>)?;
+    // Menu labels come from the native word list (`rust_i18n::t!`), so this must
+    // run after `l10n::set_locale` — see `apply_locale`.
+    let panel = MenuItem::with_id(
+        app,
+        "panel",
+        rust_i18n::t!("native.menu.panel").to_string(),
+        true,
+        None::<&str>,
+    )?;
+    let main = MenuItem::with_id(
+        app,
+        "main",
+        rust_i18n::t!("native.menu.main").to_string(),
+        true,
+        None::<&str>,
+    )?;
     let sep = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+    let quit = MenuItem::with_id(
+        app,
+        "quit",
+        rust_i18n::t!("native.menu.quit").to_string(),
+        true,
+        None::<&str>,
+    )?;
     Menu::with_items(app, &[&panel, &main, &sep, &quit])
+}
+
+/// Select the native word list and refresh the strings that were already built
+/// from it (today: the tray menu).
+///
+/// Called once at startup — before the tray exists, so the first menu is already
+/// translated — and again whenever the language setting changes.
+pub fn apply_locale(app: &AppHandle) {
+    let locale = env::resolved_locale();
+    l10n::set_locale(locale);
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        match tray_menu(app) {
+            Ok(menu) => {
+                if let Err(e) = tray.set_menu(Some(menu)) {
+                    logging::write("warn", "i18n", &format!("tray menu update failed: {e}"));
+                }
+            }
+            Err(e) => logging::write("warn", "i18n", &format!("tray menu rebuild failed: {e}")),
+        }
+    }
+    logging::write("info", "i18n", &format!("native locale -> {locale}"));
 }
 
 /// Builds the tray icon exactly once.
@@ -161,7 +234,7 @@ fn tray_menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
 /// built another icon (up to six duplicates whenever the shell *did* accept them).
 /// The log line below carries the diagnosis; the app never waits on the tray.
 fn build_tray_icon(app: &AppHandle, menu: Menu<Wry>) -> tauri::Result<()> {
-    let mut builder = TrayIconBuilder::with_id("toolbox")
+    let mut builder = TrayIconBuilder::with_id(TRAY_ID)
         .tooltip("Toolbox")
         .menu(&menu)
         .show_menu_on_left_click(false)

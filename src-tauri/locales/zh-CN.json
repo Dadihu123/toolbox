@@ -1,0 +1,121 @@
+{
+  "native": {
+    "menu": {
+      "panel": "打开工具面板",
+      "main": "主界面…",
+      "quit": "退出"
+    },
+    "action": {
+      "open_panel": "唤出工具面板",
+      "open_main": "打开主界面",
+      "toggle_ball": "显示 / 隐藏悬浮球",
+      "join": "%{tool}：%{title}",
+      "reason": {
+        "unset": "未设置快捷键",
+        "conflict": "与「%{owner}」冲突",
+        "invalid": "快捷键格式无法识别",
+        "requires_open": "工具未打开，打开后生效",
+        "register_failed": "注册失败（可能被其他程序占用）"
+      },
+      "parse": {
+        "unset": "未设置",
+        "invalid": "无法解析快捷键「%{combo}」：%{error}"
+      },
+      "register": {
+        "empty_id": "动作 id 不能为空",
+        "long_id": "动作 id 过长",
+        "bad_id": "动作 id 只能包含字母、数字、- 和 _",
+        "bad_combo": "无法识别快捷键「%{combo}」",
+        "unavailable": "动作注册表不可用",
+        "limit": "每个工具最多注册 %{max} 个运行期动作"
+      }
+    },
+    "permission": {
+      "files_open": {
+        "label": "读取文件",
+        "detail": "读取你选择的文件"
+      },
+      "files_save": {
+        "label": "保存文件",
+        "detail": "弹出保存对话框并写入你选择的文件"
+      },
+      "clipboard_read": {
+        "label": "读取剪贴板",
+        "detail": "读取系统剪贴板内容"
+      },
+      "clipboard_write": {
+        "label": "写入剪贴板",
+        "detail": "写入系统剪贴板"
+      },
+      "data": {
+        "label": "本地数据",
+        "detail": "在 data/tool-data/%{id} 下保存私有数据"
+      },
+      "external_open": {
+        "label": "外部链接",
+        "detail": "用系统浏览器打开链接"
+      },
+      "network": {
+        "label": "网络访问",
+        "detail": "访问指定网络域名",
+        "detail_hosts": "访问指定网络域名：%{hosts}",
+        "separator": "、"
+      }
+    },
+    "registry": {
+      "join": "；",
+      "id_mismatch": "清单 id「%{id}」与目录名「%{dir}」不一致",
+      "bad_id": "id 只能包含小写字母、数字、- 和 _",
+      "missing_name": "缺少 name",
+      "manifest_version": "清单版本 %{version} 高于本工具箱支持的 1",
+      "bridge_version": "需要 Bridge v%{version}，本工具箱仅支持到 v2",
+      "locales_invalid": "tool.json 的多语言字段格式有误（已按基础文案加载）：%{error}",
+      "entry_missing": "入口文件不存在：%{entry}",
+      "entry_escape": "入口路径越界"
+    },
+    "tool": {
+      "not_found": "未找到工具「%{id}」",
+      "load_failed": "工具「%{id}」无法加载：%{error}",
+      "disabled": "工具「%{id}」已在设置中停用",
+      "icon_unavailable": "工具窗口图标不可用：%{error}"
+    },
+    "install": {
+      "session_expired": "安装会话已失效，请重新选择工具包",
+      "no_manifest": "压缩包内未找到 tool.json",
+      "parse_manifest": "tool.json 解析失败：%{error}",
+      "builtin_override": "「%{id}」是内置工具，不能覆盖",
+      "too_large": "压缩包解压后体积过大",
+      "bad_id": "工具 id 非法（只允许小写字母、数字、- 和 _）",
+      "missing_name": "tool.json 缺少工具名称（name）",
+      "manifest_version": "清单版本 %{version} 高于本工具箱支持的最高版本 1",
+      "bridge_version": "该工具需要 Bridge v%{version}，本工具箱仅支持到 v2",
+      "entry_missing": "入口文件不存在：%{entry}",
+      "entry_escape": "入口路径越界",
+      "write_tools_failed": "写入 tools.json 失败：%{error}",
+      "unknown_permission": "未知的权限项：%{raw}",
+      "granted_format": "granted 参数格式不正确",
+      "uninstall_builtin": "只能卸载第三方工具",
+      "bad_zip": "不是有效的 zip：%{error}",
+      "too_many_files": "压缩包内文件过多",
+      "illegal_path": "压缩包内包含非法路径"
+    },
+    "bridge": {
+      "host_only_window": "此窗口无权调用工具接口",
+      "identity": "工具身份不匹配",
+      "decode_failed": "数据解码失败：%{error}",
+      "unknown_method": "未知的桥接方法：%{method}",
+      "missing_permission": "工具「%{id}」未声明权限 %{name}",
+      "save_cancelled": "已取消保存",
+      "write_failed": "写入失败：%{error}",
+      "read_failed": "读取失败：%{error}"
+    },
+    "ipc": {
+      "host_only": "工具窗口无权调用宿主接口",
+      "zip_filter": "Toolbox 工具包",
+      "inspect_serialize": "检查结果序列化失败",
+      "inspection_missing": "缺少安装会话标识，请重新选择工具包",
+      "hotkey_invalid": "快捷键格式无法识别",
+      "hotkey_conflict": "与「%{title}」冲突"
+    }
+  }
+}

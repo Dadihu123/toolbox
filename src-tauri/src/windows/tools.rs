@@ -64,6 +64,22 @@ pub fn open_tool_ids(app: &AppHandle) -> Vec<String> {
         .collect()
 }
 
+/// Re-apply the localized title to every open tool window.
+///
+/// The title bar is native, so a language switch cannot be fixed by the page's own
+/// i18n — the host has to push the new title.
+pub fn refresh_titles(app: &AppHandle) {
+    let locale = crate::env::resolved_locale();
+    for (label, win) in app.webview_windows() {
+        let Some(tool_id) = tool_id_from_label(&label) else {
+            continue;
+        };
+        if let Some(manifest) = registry::find(&tool_id) {
+            let _ = win.set_title(&manifest.name_for(locale));
+        }
+    }
+}
+
 /// Open (or focus) a tool window. Safe to call from any thread and from inside
 /// event-loop callbacks: creation is hopped onto the main thread when needed.
 pub fn open(app: &AppHandle, tool_id: &str) -> Result<(), String> {
@@ -72,13 +88,18 @@ pub fn open(app: &AppHandle, tool_id: &str) -> Result<(), String> {
         return Ok(());
     }
     let Some(manifest) = registry::find(tool_id) else {
-        return Err(format!("未找到工具「{tool_id}」"));
+        return Err(rust_i18n::t!("native.tool.not_found", id = tool_id).to_string());
     };
     if !manifest.error.is_empty() {
-        return Err(format!("工具「{tool_id}」无法加载：{}", manifest.error));
+        return Err(rust_i18n::t!(
+            "native.tool.load_failed",
+            id = tool_id,
+            error = manifest.error.as_str()
+        )
+        .to_string());
     }
     if !registry::is_enabled(&crate::state::load_tools(), tool_id) {
-        return Err(format!("工具「{tool_id}」已在设置中停用"));
+        return Err(rust_i18n::t!("native.tool.disabled", id = tool_id).to_string());
     }
 
     let handle = app.clone();
@@ -226,15 +247,21 @@ fn build(app: &AppHandle, tool_id: &str) -> Result<(), String> {
         return Ok(());
     }
     let Some(manifest) = registry::find(tool_id) else {
-        return Err(format!("未找到工具「{tool_id}」"));
+        return Err(rust_i18n::t!("native.tool.not_found", id = tool_id).to_string());
     };
     if !manifest.error.is_empty() {
-        return Err(format!("工具「{tool_id}」无法加载：{}", manifest.error));
+        return Err(rust_i18n::t!(
+            "native.tool.load_failed",
+            id = tool_id,
+            error = manifest.error.as_str()
+        )
+        .to_string());
     }
     if !registry::is_enabled(&crate::state::load_tools(), tool_id) {
-        return Err(format!("工具「{tool_id}」已在设置中停用"));
+        return Err(rust_i18n::t!("native.tool.disabled", id = tool_id).to_string());
     }
 
+    let locale = crate::env::resolved_locale();
     let label = label_for(tool_id);
     // A freshly (re)created window is not ready until its shim calls bridge.ready().
     mark_not_ready(&label);
@@ -248,13 +275,17 @@ fn build(app: &AppHandle, tool_id: &str) -> Result<(), String> {
 
     let (width, height, min_width, min_height) = window_metrics(&manifest.window);
     let icon = icons::tool_icon_or_fallback(tool_id, ICON_PX);
+    // Title bar and `prefers-color-scheme` both follow the resolved theme. Passing
+    // `Some(..)` (never `None`) also stamps the shared WebView2 profile, which is
+    // what keeps every open window on the same theme — see env.rs.
+    let theme = crate::env::resolved_theme();
 
     // A tool is a normal, independent app window: the native frame provides the
     // minimise / maximise / close buttons, drag-by-caption and resize borders.
     // `skip_taskbar(false)` is the default, but it is stated explicitly because
     // every tool must own a taskbar button showing its own icon.
     let win = WebviewWindowBuilder::new(app, &label, url)
-        .title(&manifest.name)
+        .title(&manifest.name_for(locale))
         .inner_size(width, height)
         .min_inner_size(min_width, min_height)
         .center()
@@ -264,19 +295,25 @@ fn build(app: &AppHandle, tool_id: &str) -> Result<(), String> {
         // Shown only after both icon sizes are in place, otherwise the taskbar
         // briefly shows the host icon before the tool's own one lands.
         .visible(false)
-        // The shell UI is dark-only (`ui/*` ships one dark token set), so force a
-        // dark caption instead of following the OS app theme. Tao implements this
-        // with DwmSetWindowAttribute(DWMWA_USE_IMMERSIVE_DARK_MODE).
-        .theme(Some(tauri::Theme::Dark))
+        // Caption follows the resolved theme (tao implements it with
+        // DwmSetWindowAttribute(DWMWA_USE_IMMERSIVE_DARK_MODE)); the webview
+        // background matches the shell token so the first frame does not flash
+        // white before the tool's own page paints.
+        .theme(Some(theme.tauri_theme()))
+        .background_color(theme.background())
         // `icon` becomes ICON_SMALL, i.e. the title-bar glyph. The big icon the
         // taskbar draws is set below via `set_taskbar_icon`.
         .icon(icon.to_tauri_image())
-        .map_err(|e| format!("工具窗口图标不可用：{e}"))?
+        .map_err(|e| {
+            rust_i18n::t!("native.tool.icon_unavailable", error = e.to_string()).to_string()
+        })?
         .data_directory(webview_dir)
         .disable_drag_drop_handler() // HTML5 drop must reach the page
         .initialization_script(&crate::bridge::shim_script(
             &manifest,
             &registry::effective_permissions(&manifest),
+            theme,
+            locale,
         ))
         .on_download(|_webview, event| {
             handle_download(event);

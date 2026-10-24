@@ -65,16 +65,16 @@ pub fn register_runtime(
 ) -> Result<String, String> {
     let local_id = local_id.trim();
     if local_id.is_empty() {
-        return Err("动作 id 不能为空".into());
+        return Err(rust_i18n::t!("native.action.register.empty_id").to_string());
     }
     if local_id.len() > 48 {
-        return Err("动作 id 过长".into());
+        return Err(rust_i18n::t!("native.action.register.long_id").to_string());
     }
     if !local_id
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
     {
-        return Err("动作 id 只能包含字母、数字、- 和 _".into());
+        return Err(rust_i18n::t!("native.action.register.bad_id").to_string());
     }
     let title = {
         let t = title.trim();
@@ -86,11 +86,15 @@ pub fn register_runtime(
     };
     let combo = normalize_combo(combo);
     if !combo.is_empty() && parse_combo(&combo).is_err() {
-        return Err(format!("无法识别快捷键「{combo}」"));
+        return Err(
+            rust_i18n::t!("native.action.register.bad_combo", combo = combo.as_str()).to_string(),
+        );
     }
 
     let full_id = format!("tool.{tool_id}.runtime.{local_id}");
-    let mut map = RUNTIME.lock().map_err(|_| "动作注册表不可用".to_string())?;
+    let mut map = RUNTIME
+        .lock()
+        .map_err(|_| rust_i18n::t!("native.action.register.unavailable").to_string())?;
     let list = map.entry(tool_id.to_string()).or_default();
     if let Some(existing) = list.iter_mut().find(|a| a.local_id == local_id) {
         existing.title = title;
@@ -98,7 +102,11 @@ pub fn register_runtime(
         return Ok(full_id);
     }
     if list.len() >= MAX_RUNTIME_ACTIONS {
-        return Err(format!("每个工具最多注册 {MAX_RUNTIME_ACTIONS} 个运行期动作"));
+        return Err(rust_i18n::t!(
+            "native.action.register.limit",
+            max = MAX_RUNTIME_ACTIONS
+        )
+        .to_string());
     }
     list.push(RuntimeAction {
         tool_id: tool_id.to_string(),
@@ -144,16 +152,22 @@ fn runtime_action_defs() -> Vec<ActionDef> {
         return Vec::new();
     };
     let mut out = Vec::new();
+    let locale = crate::env::resolved_locale();
     for (tool_id, list) in map.iter() {
         let tool_name = registry::find(tool_id)
-            .map(|m| m.name)
+            .map(|m| m.name_for(locale))
             .unwrap_or_else(|| tool_id.clone());
         for a in list {
             out.push(ActionDef {
                 id: format!("tool.{}.runtime.{}", a.tool_id, a.local_id),
                 scope: "tool".into(),
                 tool_id: Some(a.tool_id.clone()),
-                title: format!("{tool_name}：{}", a.title),
+                title: rust_i18n::t!(
+                    "native.action.join",
+                    tool = tool_name.as_str(),
+                    title = a.title.as_str()
+                )
+                .to_string(),
                 default_combo: a.combo.clone(),
                 requires_open: true,
                 accepts: vec![],
@@ -164,12 +178,13 @@ fn runtime_action_defs() -> Vec<ActionDef> {
 }
 
 /// host built-in actions
-pub fn builtin_actions(cfg: &Config) -> Vec<ActionDef> {    vec![
+pub fn builtin_actions(cfg: &Config) -> Vec<ActionDef> {
+    vec![
         ActionDef {
             id: "app.open-panel".into(),
             scope: "app".into(),
             tool_id: None,
-            title: "唤出工具面板".into(),
+            title: rust_i18n::t!("native.action.open_panel").to_string(),
             default_combo: cfg.panel_hotkey.clone(),
             requires_open: false,
             accepts: vec![],
@@ -178,7 +193,7 @@ pub fn builtin_actions(cfg: &Config) -> Vec<ActionDef> {    vec![
             id: "app.open-main".into(),
             scope: "app".into(),
             tool_id: None,
-            title: "打开主界面".into(),
+            title: rust_i18n::t!("native.action.open_main").to_string(),
             default_combo: "Ctrl+Shift+M".into(),
             requires_open: false,
             accepts: vec![],
@@ -187,7 +202,7 @@ pub fn builtin_actions(cfg: &Config) -> Vec<ActionDef> {    vec![
             id: "app.toggle-ball".into(),
             scope: "app".into(),
             tool_id: None,
-            title: "显示 / 隐藏悬浮球".into(),
+            title: rust_i18n::t!("native.action.toggle_ball").to_string(),
             default_combo: String::new(),
             requires_open: false,
             accepts: vec![],
@@ -199,6 +214,7 @@ pub fn builtin_actions(cfg: &Config) -> Vec<ActionDef> {    vec![
 pub fn tool_actions(tools: &[registry::Manifest]) -> Vec<ActionDef> {
     let states = state::load_tools();
     let mut out = Vec::new();
+    let locale = crate::env::resolved_locale();
     for t in tools {
         if !t.error.is_empty() || !registry::is_enabled(&states, &t.id) {
             continue;
@@ -208,7 +224,12 @@ pub fn tool_actions(tools: &[registry::Manifest]) -> Vec<ActionDef> {
                 id: format!("tool.{}.{}", t.id, a.id),
                 scope: "tool".into(),
                 tool_id: Some(t.id.clone()),
-                title: format!("{}：{}", t.name, a.title),
+                title: rust_i18n::t!(
+                    "native.action.join",
+                    tool = t.name_for(locale).as_str(),
+                    title = t.action_title_for(a, locale).as_str()
+                )
+                .to_string(),
                 default_combo: a.default_hotkey.clone(),
                 requires_open: a.requires_open,
                 accepts: a.accepts.clone(),
@@ -244,12 +265,19 @@ pub fn effective_combo(action: &ActionDef, overrides: &BTreeMap<String, String>)
 pub fn parse_combo(combo: &str) -> Result<Shortcut, String> {
     let trimmed = combo.trim();
     if trimmed.is_empty() {
-        return Err("未设置".into());
+        return Err(rust_i18n::t!("native.action.parse.unset").to_string());
     }
     trimmed
         .to_ascii_lowercase()
         .parse::<Shortcut>()
-        .map_err(|e| format!("无法解析快捷键「{trimmed}」：{e}"))
+        .map_err(|e| {
+            rust_i18n::t!(
+                "native.action.parse.invalid",
+                combo = trimmed,
+                error = e.to_string()
+            )
+            .to_string()
+        })
 }
 
 /// Normalise to the canonical "Ctrl+Shift+T" form.
@@ -399,23 +427,25 @@ pub fn hotkey_table(app: &AppHandle) -> Vec<HotkeyRow> {
 
         if combo.trim().is_empty() {
             effective = false;
-            reason = Some("未设置快捷键".into());
+            reason = Some(rust_i18n::t!("native.action.reason.unset").to_string());
         } else if let Some(owner) = seen.get(&combo.to_ascii_lowercase()) {
             effective = false;
-            reason = Some(format!("与「{owner}」冲突"));
+            reason = Some(
+                rust_i18n::t!("native.action.reason.conflict", owner = owner.as_str()).to_string(),
+            );
         } else if parse_combo(&combo).is_err() {
             effective = false;
-            reason = Some("快捷键格式无法识别".into());
+            reason = Some(rust_i18n::t!("native.action.reason.invalid").to_string());
         } else if a.requires_open {
             if let Some(tid) = &a.tool_id {
                 if !open_tools.contains(tid) {
                     effective = false;
-                    reason = Some("工具未打开，打开后生效".into());
+                    reason = Some(rust_i18n::t!("native.action.reason.requires_open").to_string());
                 }
             }
         } else if !is_registered(app, &combo) {
             effective = false;
-            reason = Some("注册失败（可能被其他程序占用）".into());
+            reason = Some(rust_i18n::t!("native.action.reason.register_failed").to_string());
         }
 
         if !combo.trim().is_empty() {

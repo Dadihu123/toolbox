@@ -26,14 +26,20 @@ fn build(app: &AppHandle) -> Result<(), String> {
     }
     let dir = crate::paths::get().webview_data.clone();
     let _ = std::fs::create_dir_all(&dir);
+    // Same rule as every other window: always pass the resolved theme explicitly
+    // (it stamps the shared WebView2 profile) and give the webview the shell
+    // background so the first frame does not flash white.
+    let theme = crate::env::resolved_theme();
     let win = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("main.html".into()))
         .title("Toolbox")
         .inner_size(1000.0, 700.0)
         .min_inner_size(820.0, 560.0)
         .decorations(false)
         .center()
+        .theme(Some(theme.tauri_theme()))
+        .background_color(theme.background())
         .data_directory(dir)
-        .initialization_script(crate::windows::panel::HOST_BOOTSTRAP)
+        .initialization_script(&crate::windows::panel::host_bootstrap())
         .build()
         .map_err(|e| e.to_string())?;
     let _ = win.set_focus();

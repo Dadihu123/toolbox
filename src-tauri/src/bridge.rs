@@ -130,17 +130,30 @@ fn mime_for(path: &Path) -> &'static str {
 // ----------------------------------------------------------------- shim
 
 /// Script injected before the tool's own scripts run.
+///
+/// Bridge v2 surface: the same calls as v1 plus the resolved environment
+/// (`theme`, `locale`, `availableLocales`) and the `theme` / `locale` events the
+/// host dispatches through `window.__toolboxEmit`. Tools that only know v1 keep
+/// working unchanged — the shim never removes a v1 member.
 pub fn shim_script(
     manifest: &registry::Manifest,
     permissions: &registry::Permissions,
+    theme: crate::env::Theme,
+    locale: &str,
 ) -> String {
     let tool_id = json!(manifest.id);
     let perms = serde_json::to_string(permissions).unwrap_or_else(|_| "{}".into());
+    let theme = json!(theme.as_str());
+    let locale = json!(locale);
+    let available_locales = json!(crate::env::LOCALES);
     format!(
         r#"(function () {{
   if (window.__toolbox) return;
   var TOOL_ID = {tool_id};
   var PERMS = {perms};
+  var THEME = {theme};
+  var LOCALE = {locale};
+  var AVAILABLE_LOCALES = {available_locales};
   var listeners = Object.create(null);
 
   function call(method, args) {{
@@ -150,10 +163,18 @@ pub fn shim_script(
   }}
 
   window.__toolbox = {{
-    version: 1,
+    // 2: adds theme / locale / availableLocales and the theme + locale events.
+    version: 2,
     toolId: TOOL_ID,
     mode: 'hosted',
     permissions: PERMS,
+    // Authoritative for the current language: `navigator.language` does not
+    // follow a runtime language switch. Re-read on the `locale` event.
+    locale: LOCALE,
+    // Best-effort copy of the resolved theme; `prefers-color-scheme` is the
+    // primary signal, and this one also tracks an explicit setting.
+    theme: THEME,
+    availableLocales: AVAILABLE_LOCALES,
     ready: function () {{ return call('__ready', null); }},
     files: {{
       open: function (opts) {{ return call('files.open', opts); }},
@@ -263,14 +284,15 @@ pub struct OpenedFile {
 pub fn caller_tool(window: &tauri::WebviewWindow) -> Result<registry::Manifest, String> {
     let label = window.label();
     let tool_id = crate::windows::tools::tool_id_from_label(label)
-        .ok_or_else(|| "此窗口无权调用工具接口".to_string())?;
-    registry::find(&tool_id).ok_or_else(|| format!("未找到工具「{tool_id}」"))
+        .ok_or_else(|| rust_i18n::t!("native.bridge.host_only_window").to_string())?;
+    registry::find(&tool_id)
+        .ok_or_else(|| rust_i18n::t!("native.tool.not_found", id = tool_id.as_str()).to_string())
 }
 
 pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Result<Value, String> {
     let manifest = caller_tool(window)?;
     if call.tool_id != manifest.id {
-        return Err("工具身份不匹配".into());
+        return Err(rust_i18n::t!("native.bridge.identity").into());
     }
     // Installed tools only get the permissions the user ticked in the review
     // dialog (clamped to what tool.json declares); everything else uses the
@@ -324,7 +346,10 @@ pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Resul
                 use base64::Engine;
                 base64::engine::general_purpose::STANDARD
                     .decode(data)
-                    .map_err(|e| format!("数据解码失败：{e}"))?
+                    .map_err(|e| {
+                        rust_i18n::t!("native.bridge.decode_failed", error = e.to_string())
+                            .to_string()
+                    })?
             } else {
                 data.as_bytes().to_vec()
             };
@@ -445,7 +470,7 @@ pub fn dispatch_bridge(window: &tauri::WebviewWindow, call: BridgeCall) -> Resul
             crate::windows::panel::defer_main(&app, |h| crate::actions::apply_hotkeys(&h));
             Ok(json!({ "ok": removed }))
         }
-        other => Err(format!("未知的桥接方法：{other}")),
+        other => Err(rust_i18n::t!("native.bridge.unknown_method", method = other).to_string()),
     }
 }
 
@@ -458,7 +483,12 @@ fn require(
     if check(perms) {
         Ok(())
     } else {
-        Err(format!("工具「{tool_id}」未声明权限 {name}"))
+        Err(rust_i18n::t!(
+            "native.bridge.missing_permission",
+            id = tool_id,
+            name = name
+        )
+        .to_string())
     }
 }
 
@@ -516,14 +546,18 @@ fn save_file(app: &AppHandle, name: &str, bytes: &[u8]) -> Result<String, String
         .set_file_name(name)
         .blocking_save_file()
         .and_then(|f| f.into_path().ok())
-        .ok_or_else(|| "已取消保存".to_string())?;
-    std::fs::write(&path, bytes).map_err(|e| format!("写入失败：{e}"))?;
+        .ok_or_else(|| rust_i18n::t!("native.bridge.save_cancelled").to_string())?;
+    std::fs::write(&path, bytes).map_err(|e| {
+        rust_i18n::t!("native.bridge.write_failed", error = e.to_string()).to_string()
+    })?;
     Ok(path.to_string_lossy().to_string())
 }
 
 fn read_opened_file(path: &Path) -> Result<OpenedFile, String> {
     use base64::Engine;
-    let bytes = std::fs::read(path).map_err(|e| format!("读取失败：{e}"))?;
+    let bytes = std::fs::read(path).map_err(|e| {
+        rust_i18n::t!("native.bridge.read_failed", error = e.to_string()).to_string()
+    })?;
     let name = path
         .file_name()
         .map(|s| s.to_string_lossy().to_string())

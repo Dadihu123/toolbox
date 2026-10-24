@@ -1,0 +1,121 @@
+{
+  "native": {
+    "menu": {
+      "panel": "Open panel",
+      "main": "Main window…",
+      "quit": "Quit"
+    },
+    "action": {
+      "open_panel": "Show the panel",
+      "open_main": "Open the main window",
+      "toggle_ball": "Show / hide the floating ball",
+      "join": "%{tool}: %{title}",
+      "reason": {
+        "unset": "No shortcut set",
+        "conflict": "Conflicts with “%{owner}”",
+        "invalid": "Unrecognised shortcut",
+        "requires_open": "Only while the tool is open",
+        "register_failed": "Registration failed (probably taken by another app)"
+      },
+      "parse": {
+        "unset": "Not set",
+        "invalid": "Cannot parse shortcut “%{combo}”: %{error}"
+      },
+      "register": {
+        "empty_id": "Action id cannot be empty",
+        "long_id": "Action id is too long",
+        "bad_id": "Action id may only contain letters, digits, - and _",
+        "bad_combo": "Unrecognised shortcut “%{combo}”",
+        "unavailable": "Action registry unavailable",
+        "limit": "A tool may register at most %{max} runtime actions"
+      }
+    },
+    "permission": {
+      "files_open": {
+        "label": "Read files",
+        "detail": "Read the files you pick"
+      },
+      "files_save": {
+        "label": "Save files",
+        "detail": "Show a save dialog and write the file you choose"
+      },
+      "clipboard_read": {
+        "label": "Read clipboard",
+        "detail": "Read the system clipboard"
+      },
+      "clipboard_write": {
+        "label": "Write clipboard",
+        "detail": "Write to the system clipboard"
+      },
+      "data": {
+        "label": "Local data",
+        "detail": "Store private data under data/tool-data/%{id}"
+      },
+      "external_open": {
+        "label": "External links",
+        "detail": "Open links in the system browser"
+      },
+      "network": {
+        "label": "Network",
+        "detail": "Access the listed hosts",
+        "detail_hosts": "Access the listed hosts: %{hosts}",
+        "separator": ", "
+      }
+    },
+    "registry": {
+      "join": "; ",
+      "id_mismatch": "Manifest id “%{id}” does not match the directory name “%{dir}”",
+      "bad_id": "id may only contain lowercase letters, digits, - and _",
+      "missing_name": "name is missing",
+      "manifest_version": "manifest version %{version} is newer than the supported version 1",
+      "bridge_version": "requires Bridge v%{version}; this build supports up to v2",
+      "locales_invalid": "tool.json has a malformed locales block (loaded with the base strings): %{error}",
+      "entry_missing": "Entry file does not exist: %{entry}",
+      "entry_escape": "Entry path escapes the tool directory"
+    },
+    "tool": {
+      "not_found": "Tool “%{id}” not found",
+      "load_failed": "Tool “%{id}” cannot be loaded: %{error}",
+      "disabled": "Tool “%{id}” is disabled in settings",
+      "icon_unavailable": "Tool window icon unavailable: %{error}"
+    },
+    "install": {
+      "session_expired": "The install session expired; pick the tool package again",
+      "no_manifest": "No tool.json found in the archive",
+      "parse_manifest": "Could not parse tool.json: %{error}",
+      "builtin_override": "“%{id}” is a built-in tool and cannot be overwritten",
+      "too_large": "The unpacked archive is too large",
+      "bad_id": "Illegal tool id (lowercase letters, digits, - and _ only)",
+      "missing_name": "tool.json has no tool name (name)",
+      "manifest_version": "manifest version %{version} is newer than the highest supported version 1",
+      "bridge_version": "This tool requires Bridge v%{version}; this build supports up to v2",
+      "entry_missing": "Entry file does not exist: %{entry}",
+      "entry_escape": "Entry path escapes the tool directory",
+      "write_tools_failed": "Could not write tools.json: %{error}",
+      "unknown_permission": "Unknown permission: %{raw}",
+      "granted_format": "granted has an invalid shape",
+      "uninstall_builtin": "Only third-party tools can be uninstalled",
+      "bad_zip": "Not a valid zip: %{error}",
+      "too_many_files": "The archive contains too many files",
+      "illegal_path": "The archive contains an illegal path"
+    },
+    "bridge": {
+      "host_only_window": "This window may not call the tool interface",
+      "identity": "Tool identity mismatch",
+      "decode_failed": "Could not decode the data: %{error}",
+      "unknown_method": "Unknown bridge method: %{method}",
+      "missing_permission": "Tool “%{id}” did not declare the %{name} permission",
+      "save_cancelled": "Save cancelled",
+      "write_failed": "Write failed: %{error}",
+      "read_failed": "Read failed: %{error}"
+    },
+    "ipc": {
+      "host_only": "Tool windows may not call host commands",
+      "zip_filter": "Toolbox tool package",
+      "inspect_serialize": "Could not serialise the inspection result",
+      "inspection_missing": "Missing install session; pick the tool package again",
+      "hotkey_invalid": "Unrecognised shortcut",
+      "hotkey_conflict": "Conflicts with “%{title}”"
+    }
+  }
+}

@@ -75,7 +75,11 @@ pub struct Inspection {
 
 const MAX_ENTRIES: usize = 5_000;
 const MAX_BYTES: u64 = 200 * 1024 * 1024;
-const SESSION_EXPIRED: &str = "安装会话已失效，请重新选择工具包";
+
+/// The staged review was replaced or cancelled (the dialog is stale).
+fn session_expired() -> String {
+    rust_i18n::t!("native.install.session_expired").to_string()
+}
 
 /// A zip that has been unpacked and reviewed, waiting for the user's decision.
 struct PendingInstall {
@@ -191,10 +195,12 @@ fn inspect_at(
 ) -> Result<(Inspection, PathBuf), String> {
     extract_zip(zip_path, staging)?;
     // A zip may either contain tool.json at the root or a single wrapper dir.
-    let root = find_manifest_root(staging).ok_or_else(|| "压缩包内未找到 tool.json".to_string())?;
+    let root = find_manifest_root(staging)
+        .ok_or_else(|| rust_i18n::t!("native.install.no_manifest").to_string())?;
     let text = std::fs::read_to_string(root.join("tool.json")).map_err(|e| e.to_string())?;
-    let manifest: Manifest =
-        serde_json::from_str(&text).map_err(|e| format!("tool.json 解析失败：{e}"))?;
+    let manifest: Manifest = serde_json::from_str(&text).map_err(|e| {
+        rust_i18n::t!("native.install.parse_manifest", error = e.to_string()).to_string()
+    })?;
 
     let fallback_id = root
         .file_name()
@@ -204,12 +210,12 @@ fn inspect_at(
 
     // Never overwrite a bundled tool: official ones are read-only.
     if layout.official_tools.join(&id).exists() {
-        return Err(format!("「{id}」是内置工具，不能覆盖"));
+        return Err(rust_i18n::t!("native.install.builtin_override", id = id.as_str()).to_string());
     }
 
     let (file_count, total_bytes) = dir_stats(&root);
     if file_count > MAX_ENTRIES as u64 || total_bytes > MAX_BYTES {
-        return Err("压缩包解压后体积过大".into());
+        return Err(rust_i18n::t!("native.install.too_large").into());
     }
 
     let dest = layout.installed_tools.join(&id);
@@ -222,16 +228,18 @@ fn inspect_at(
 
     let permissions = manifest.permissions.clone();
     let permission_items = permission_items(&id, &permissions);
+    // The review dialog is shown in the language the user is running right now.
+    let locale = crate::env::resolved_locale();
     let inspection = Inspection {
         ok: true,
         error: String::new(),
         inspection_id: uuid::Uuid::new_v4().to_string(),
         zip_path: zip_path.to_string_lossy().to_string(),
         id,
-        name: manifest.name.clone(),
+        name: manifest.name_for(locale),
         version: manifest.version.clone(),
         author: manifest.author.clone(),
-        description: manifest.description.clone(),
+        description: manifest.description_for(locale),
         entry,
         file_count,
         total_bytes,
@@ -256,22 +264,24 @@ fn validate_manifest(root: &Path, manifest: &Manifest, fallback_id: &str) -> Res
             .chars()
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
     {
-        return Err("工具 id 非法（只允许小写字母、数字、- 和 _）".into());
+        return Err(rust_i18n::t!("native.install.bad_id").into());
     }
     if manifest.name.trim().is_empty() {
-        return Err("tool.json 缺少工具名称（name）".into());
+        return Err(rust_i18n::t!("native.install.missing_name").into());
     }
     if manifest.manifest_version > 1 {
-        return Err(format!(
-            "清单版本 {} 高于本工具箱支持的最高版本 1",
-            manifest.manifest_version
-        ));
+        return Err(rust_i18n::t!(
+            "native.install.manifest_version",
+            version = manifest.manifest_version
+        )
+        .to_string());
     }
-    if manifest.bridge_version > 1 {
-        return Err(format!(
-            "该工具需要 Bridge v{}，本工具箱仅支持 v1",
-            manifest.bridge_version
-        ));
+    if manifest.bridge_version > 2 {
+        return Err(rust_i18n::t!(
+            "native.install.bridge_version",
+            version = manifest.bridge_version
+        )
+        .to_string());
     }
     let entry = if manifest.entry.trim().is_empty() {
         "index.html".to_string()
@@ -280,35 +290,79 @@ fn validate_manifest(root: &Path, manifest: &Manifest, fallback_id: &str) -> Res
     };
     let entry_path = root.join(&entry);
     if !entry_path.is_file() {
-        return Err(format!("入口文件不存在：{entry}"));
+        return Err(
+            rust_i18n::t!("native.install.entry_missing", entry = entry.as_str()).to_string(),
+        );
     }
     if paths::ensure_inside(root, &entry_path).is_none() {
-        return Err("入口路径越界".into());
+        return Err(rust_i18n::t!("native.install.entry_escape").into());
     }
     Ok((id, entry))
 }
 
-/// Chinese labels/explanations shown next to the checkboxes.
+/// Localised labels/explanations shown next to the checkboxes.
 fn permission_items(id: &str, permissions: &Permissions) -> Vec<PermissionItem> {
     let network_detail = if permissions.network.is_empty() {
-        "访问指定网络域名".to_string()
+        rust_i18n::t!("native.permission.network.detail").to_string()
     } else {
-        format!("访问指定网络域名：{}", permissions.network.join("、"))
+        rust_i18n::t!(
+            "native.permission.network.detail_hosts",
+            hosts = permissions
+                .network
+                .join(&rust_i18n::t!("native.permission.network.separator"))
+        )
+        .to_string()
     };
-    let data_detail = format!("在 data/tool-data/{id} 下保存私有数据");
-    let rows: [(&str, &str, String, bool); 7] = [
-        ("files.open", "读取文件", "读取你选择的文件".into(), permissions.files_open),
-        ("files.save", "保存文件", "弹出保存对话框并写入你选择的文件".into(), permissions.files_save),
-        ("clipboard.read", "读取剪贴板", "读取系统剪贴板内容".into(), permissions.clipboard_read),
-        ("clipboard.write", "写入剪贴板", "写入系统剪贴板".into(), permissions.clipboard_write),
-        ("data", "本地数据", data_detail, permissions.data),
-        ("external.open", "外部链接", "用系统浏览器打开链接".into(), permissions.external_open),
-        ("network", "网络访问", network_detail, !permissions.network.is_empty()),
+    let data_detail =
+        rust_i18n::t!("native.permission.data.detail", id = id).to_string();
+    let rows: [(&str, String, String, bool); 7] = [
+        (
+            "files.open",
+            rust_i18n::t!("native.permission.files_open.label").to_string(),
+            rust_i18n::t!("native.permission.files_open.detail").to_string(),
+            permissions.files_open,
+        ),
+        (
+            "files.save",
+            rust_i18n::t!("native.permission.files_save.label").to_string(),
+            rust_i18n::t!("native.permission.files_save.detail").to_string(),
+            permissions.files_save,
+        ),
+        (
+            "clipboard.read",
+            rust_i18n::t!("native.permission.clipboard_read.label").to_string(),
+            rust_i18n::t!("native.permission.clipboard_read.detail").to_string(),
+            permissions.clipboard_read,
+        ),
+        (
+            "clipboard.write",
+            rust_i18n::t!("native.permission.clipboard_write.label").to_string(),
+            rust_i18n::t!("native.permission.clipboard_write.detail").to_string(),
+            permissions.clipboard_write,
+        ),
+        (
+            "data",
+            rust_i18n::t!("native.permission.data.label").to_string(),
+            data_detail,
+            permissions.data,
+        ),
+        (
+            "external.open",
+            rust_i18n::t!("native.permission.external_open.label").to_string(),
+            rust_i18n::t!("native.permission.external_open.detail").to_string(),
+            permissions.external_open,
+        ),
+        (
+            "network",
+            rust_i18n::t!("native.permission.network.label").to_string(),
+            network_detail,
+            !permissions.network.is_empty(),
+        ),
     ];
     rows.into_iter()
         .map(|(key, label, detail, bit)| PermissionItem {
             key: key.to_string(),
-            label: label.to_string(),
+            label,
             detail,
             bit,
         })
@@ -323,11 +377,11 @@ pub fn install_pending(inspection_id: &str, granted: &Value) -> Result<InstallRe
     let layout = InstallLayout::from_paths();
     let mut pending = pending_lock();
     let Some(item) = pending.take() else {
-        return Err(SESSION_EXPIRED.into());
+        return Err(session_expired());
     };
     if item.inspection_id != inspection_id {
         let _ = std::fs::remove_dir_all(&item.staging);
-        return Err(SESSION_EXPIRED.into());
+        return Err(session_expired());
     }
     crate::logging::write(
         "info",
@@ -356,7 +410,7 @@ fn commit_install(
     let inspection = &item.inspection;
     let id = inspection.id.clone();
     if layout.official_tools.join(&id).exists() {
-        return Err(format!("「{id}」是内置工具，不能覆盖"));
+        return Err(rust_i18n::t!("native.install.builtin_override", id = id.as_str()).to_string());
     }
     let permissions = granted_permissions(&inspection.permissions, granted)?;
 
@@ -404,7 +458,7 @@ fn commit_install(
         if let Some(backup) = &backup {
             let _ = std::fs::rename(backup, &dest);
         }
-        return Err(format!("写入 tools.json 失败：{e}"));
+        return Err(rust_i18n::t!("native.install.write_tools_failed", error = e.to_string()).to_string());
     }
 
     Ok(InstallResult {
@@ -422,7 +476,7 @@ pub fn granted_permissions(declared: &Permissions, granted: &Value) -> Result<Pe
     let mut picked: BTreeSet<&'static str> = BTreeSet::new();
     let mut accept = |raw: &str| -> Result<(), String> {
         let key = normalize_permission_key(raw)
-            .ok_or_else(|| format!("未知的权限项：{raw}"))?;
+            .ok_or_else(|| rust_i18n::t!("native.install.unknown_permission", raw = raw).to_string())?;
         picked.insert(key);
         Ok(())
     };
@@ -432,7 +486,7 @@ pub fn granted_permissions(declared: &Permissions, granted: &Value) -> Result<Pe
             for item in items {
                 let raw = item
                     .as_str()
-                    .ok_or_else(|| "granted 参数格式不正确".to_string())?;
+                    .ok_or_else(|| rust_i18n::t!("native.install.granted_format").to_string())?;
                 accept(raw)?;
             }
         }
@@ -443,7 +497,7 @@ pub fn granted_permissions(declared: &Permissions, granted: &Value) -> Result<Pe
                 }
             }
         }
-        _ => return Err("granted 参数格式不正确".into()),
+        _ => return Err(rust_i18n::t!("native.install.granted_format").into()),
     }
 
     let has = |key: &str| picked.contains(key);
@@ -483,7 +537,7 @@ pub fn uninstall(tool_id: &str, purge_data: bool) -> Result<(), String> {
     let p = paths::get();
     let dir = p.installed_tools.join(tool_id);
     if !dir.exists() {
-        return Err("只能卸载第三方工具".into());
+        return Err(rust_i18n::t!("native.install.uninstall_builtin").into());
     }
     std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
     let mut states = state::load_tools();
@@ -566,22 +620,23 @@ fn dir_stats(dir: &Path) -> (u64, u64) {
 
 fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
     let file = std::fs::File::open(zip_path).map_err(|e| e.to_string())?;
-    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("不是有效的 zip：{e}"))?;
+    let mut archive = zip::ZipArchive::new(file)
+        .map_err(|e| rust_i18n::t!("native.install.bad_zip", error = e.to_string()).to_string())?;
     if archive.len() > MAX_ENTRIES {
-        return Err("压缩包内文件过多".into());
+        return Err(rust_i18n::t!("native.install.too_many_files").into());
     }
     let mut total: u64 = 0;
     for i in 0..archive.len() {
         let mut entry = archive.by_index(i).map_err(|e| e.to_string())?;
         let Some(name) = entry.enclosed_name() else {
-            return Err("压缩包内包含非法路径".into());
+            return Err(rust_i18n::t!("native.install.illegal_path").into());
         };
         if name.components().any(|c| matches!(c, Component::ParentDir)) {
-            return Err("压缩包内包含非法路径".into());
+            return Err(rust_i18n::t!("native.install.illegal_path").into());
         }
         total += entry.size();
         if total > MAX_BYTES {
-            return Err("压缩包解压后体积过大".into());
+            return Err(rust_i18n::t!("native.install.too_large").into());
         }
         let out = dest.join(name);
         if entry.is_dir() {
@@ -593,7 +648,7 @@ fn extract_zip(zip_path: &Path, dest: &Path) -> Result<(), String> {
             let mut buf = Vec::new();
             entry.read_to_end(&mut buf).map_err(|e| e.to_string())?;
             if buf.len() as u64 > MAX_BYTES {
-                return Err("压缩包解压后体积过大".into());
+                return Err(rust_i18n::t!("native.install.too_large").into());
             }
             std::fs::write(&out, buf).map_err(|e| e.to_string())?;
         }

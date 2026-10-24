@@ -23,7 +23,7 @@ use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
 use std::sync::OnceLock;
 
 use tauri::AppHandle;
-use windows::core::w;
+use windows::core::{w, PCWSTR};
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, CreateCompatibleDC, CreateDIBSection, DeleteDC, DeleteObject, EndPaint, GetDC,
@@ -1184,6 +1184,18 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             show_menu(hwnd);
             LRESULT(0)
         }
+        // The ball is the only always-on top-level window, so it is the one that
+        // can carry a live environment change: Windows broadcasts
+        // WM_SETTINGCHANGE to top-level windows (message-only windows never see
+        // it). Deliberately not filtered on lParam — a theme switch, a
+        // high-contrast switch and a display-language change all arrive this way
+        // and all of them matter. The handler re-reads the registry/language list
+        // and pushes the result to every webview; it only posts messages, so the
+        // window procedure is not blocked.
+        WM_SETTINGCHANGE => {
+            crate::env::on_setting_change(&app());
+            LRESULT(0)
+        }
         _ => DefWindowProcW(hwnd, msg, wparam, lparam),
     };
     // The handlers above mutate the thread-local ball; mirror the cross-thread
@@ -1199,10 +1211,15 @@ fn show_menu(hwnd: HWND) {
     const ID_QUIT: usize = 3;
     unsafe {
         let Ok(menu) = CreatePopupMenu() else { return };
-        let _ = AppendMenuW(menu, MF_STRING, ID_PANEL, w!("打开工具面板"));
-        let _ = AppendMenuW(menu, MF_STRING, ID_MAIN, w!("主界面…"));
+        // Menu strings come from the native word list; `AppendMenuW` wants a
+        // NUL-terminated UTF-16 buffer that outlives the call.
+        let panel = wide(&rust_i18n::t!("native.menu.panel"));
+        let main = wide(&rust_i18n::t!("native.menu.main"));
+        let quit = wide(&rust_i18n::t!("native.menu.quit"));
+        let _ = AppendMenuW(menu, MF_STRING, ID_PANEL, PCWSTR(panel.as_ptr()));
+        let _ = AppendMenuW(menu, MF_STRING, ID_MAIN, PCWSTR(main.as_ptr()));
         let _ = AppendMenuW(menu, MF_SEPARATOR, 0, None);
-        let _ = AppendMenuW(menu, MF_STRING, ID_QUIT, w!("退出"));
+        let _ = AppendMenuW(menu, MF_STRING, ID_QUIT, PCWSTR(quit.as_ptr()));
 
         let mut pt = POINT::default();
         let _ = GetCursorPos(&mut pt);
@@ -1224,6 +1241,11 @@ fn show_menu(hwnd: HWND) {
             _ => {}
         }
     }
+}
+
+/// NUL-terminated UTF-16 for the Win32 menu APIs.
+fn wide(text: &str) -> Vec<u16> {
+    text.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 // ------------------------------------------------------------- public api

@@ -1,6 +1,6 @@
 [package]
 name = "toolbox"
-version = "0.1.0"
+version = "0.2.0"
 description = "Toolbox - portable personal toolset host"
 edition = "2021"
 rust-version = "1.80"
@@ -21,6 +21,9 @@ tauri-plugin-clipboard-manager = "2"
 tauri-plugin-single-instance = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Native (Rust-side) translations: tray menu, ball menu, install permission
+# labels, built-in action titles and the error strings the UI shows.
+rust-i18n = "4"
 base64 = "0.22"
 uuid = { version = "1", features = ["v4"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }
@@ -34,12 +37,20 @@ windows = { version = "0.62", features = [
   "Win32_Foundation",
   "Win32_Graphics_Gdi",
   "Win32_Graphics_Dwm",
+  # 0.2.0 environment service: GetUserPreferredUILanguages, AppsUseLightTheme,
+  # HIGHCONTRASTW (which lives under UI::Accessibility, not WindowsAndMessaging).
+  "Win32_Globalization",
+  "Win32_System_Registry",
+  "Win32_UI_Accessibility",
   "Win32_System_LibraryLoader",
   "Win32_UI_HiDpi",
   "Win32_UI_Input_KeyboardAndMouse",
   "Win32_UI_Shell",
   "Win32_UI_WindowsAndMessaging",
 ] }
+# Runtime theme switch: ICoreWebView2_13::Profile()::SetPreferredColorScheme.
+# Pinned to the exact version wry 0.57.0 links, so the COM types are identical.
+webview2-com = "=0.39.1"
 
 [profile.release]
 opt-level = "s"

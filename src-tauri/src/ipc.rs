@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, Manager, WebviewWindow};
 
 use crate::actions;
+use crate::env;
 use crate::install;
 use crate::paths;
 use crate::registry;
@@ -18,7 +19,7 @@ use crate::windows;
 
 fn require_host(window: &WebviewWindow) -> Result<(), String> {
     if windows::tools::tool_id_from_label(window.label()).is_some() {
-        return Err("工具窗口无权调用宿主接口".into());
+        return Err(rust_i18n::t!("native.ipc.host_only").to_string());
     }
     Ok(())
 }
@@ -46,6 +47,9 @@ pub struct ToolDto {
     pub permissions: registry::Permissions,
     /// True when the user explicitly granted permissions at install time.
     pub granted: bool,
+    /// Every language's name/description/action titles, so the panel search
+    /// matches a query in either language (see `Manifest::search_text`).
+    pub search_text: String,
 }
 
 #[derive(Serialize)]
@@ -65,6 +69,8 @@ pub struct AppStateDto {
     pub official_tools_dir: String,
     pub installed_tools_dir: String,
     pub config: Config,
+    /// Effective theme/locale + what Windows reports (see `env::snapshot`).
+    pub env: env::EnvDto,
     pub tools: Vec<ToolDto>,
     pub actions: Vec<actions::HotkeyRow>,
 }
@@ -76,6 +82,9 @@ fn build_state() -> AppStateDto {
     let states = state::load_tools();
     let manifests = registry::scan();
     let rows = actions::hotkey_table(&crate::app_handle());
+    // Names, descriptions and action titles are rendered in the current language;
+    // the base strings in tool.json stay the fallback.
+    let locale = env::resolved_locale();
 
     let tools = manifests
         .into_iter()
@@ -88,7 +97,7 @@ fn build_state() -> AppStateDto {
                 .iter()
                 .map(|a| ActionDto {
                     id: a.id.clone(),
-                    title: a.title.clone(),
+                    title: m.action_title_for(a, locale),
                     combo: overrides
                         .get(&format!("tool.{}.{}", m.id, a.id))
                         .cloned()
@@ -101,9 +110,10 @@ fn build_state() -> AppStateDto {
                 icon_data_url: registry::icon_data_url(&dir, &m.icon),
                 actions: tool_actions,
                 error: m.error.clone(),
-                id: m.id,
-                name: m.name,
-                description: m.description,
+                search_text: m.search_text(),
+                id: m.id.clone(),
+                name: m.name_for(locale),
+                description: m.description_for(locale),
                 version: m.version,
                 author: m.author,
                 source: m.source,
@@ -122,6 +132,7 @@ fn build_state() -> AppStateDto {
         official_tools_dir: p.official_tools.to_string_lossy().to_string(),
         installed_tools_dir: p.installed_tools.to_string_lossy().to_string(),
         config: cfg,
+        env: env::snapshot(),
         tools,
         actions: rows,
     }
@@ -189,7 +200,7 @@ pub fn inspect_tool_zip(window: WebviewWindow) -> Result<Value, String> {
     let picked = app
         .dialog()
         .file()
-        .add_filter("Toolbox 工具包", &["zip"])
+        .add_filter(rust_i18n::t!("native.ipc.zip_filter").to_string(), &["zip"])
         .blocking_pick_file()
         .and_then(|f| f.into_path().ok());
     let Some(zip) = picked else {
@@ -198,8 +209,9 @@ pub fn inspect_tool_zip(window: WebviewWindow) -> Result<Value, String> {
         return Ok(json!({ "ok": false, "error": "cancelled" }));
     };
     match install::inspect_zip(&zip) {
-        Ok(inspection) => Ok(serde_json::to_value(inspection)
-            .unwrap_or_else(|_| json!({ "ok": false, "error": "检查结果序列化失败" }))),
+        Ok(inspection) => Ok(serde_json::to_value(inspection).unwrap_or_else(|_| {
+            json!({ "ok": false, "error": rust_i18n::t!("native.ipc.inspect_serialize") })
+        })),
         Err(e) => Ok(json!({ "ok": false, "error": e })),
     }
 }
@@ -219,7 +231,7 @@ pub fn install_tool(
         return Ok(json!({ "ok": false, "error": "cancelled" }));
     };
     let Some(inspection_id) = inspection_id else {
-        return Ok(json!({ "ok": false, "error": "缺少安装会话标识，请重新选择工具包" }));
+        return Ok(json!({ "ok": false, "error": rust_i18n::t!("native.ipc.inspection_missing") }));
     };
     match install::install_pending(&inspection_id, &granted) {
         Ok(r) => {
@@ -238,7 +250,7 @@ pub fn set_hotkey(window: WebviewWindow, action_id: String, combo: String) -> Re
     let app = window.app_handle().clone();
     let combo = actions::normalize_combo(&combo);
     if !combo.is_empty() && actions::parse_combo(&combo).is_err() {
-        return Ok(json!({ "ok": false, "reason": "快捷键格式无法识别" }));
+        return Ok(json!({ "ok": false, "reason": rust_i18n::t!("native.ipc.hotkey_invalid") }));
     }
     // conflict against other actions
     let rows = actions::hotkey_table(&app);
@@ -246,7 +258,10 @@ pub fn set_hotkey(window: WebviewWindow, action_id: String, combo: String) -> Re
         .iter()
         .find(|r| r.id != action_id && !combo.is_empty() && r.combo.eq_ignore_ascii_case(&combo))
     {
-        return Ok(json!({ "ok": false, "reason": format!("与「{}」冲突", other.title) }));
+        return Ok(json!({
+            "ok": false,
+            "reason": rust_i18n::t!("native.ipc.hotkey_conflict", title = other.title.as_str())
+        }));
     }
 
     let mut overrides = state::load_hotkeys();
@@ -289,12 +304,16 @@ pub fn save_config(window: WebviewWindow, patch: Value) -> Result<Value, String>
     require_host(&window)?;
     let app = window.app_handle().clone();
     let mut cfg = state::load_config();
+    let mut env_changed = false;
     if let Some(obj) = patch.as_object() {
         if let Some(v) = obj.get("locale").and_then(|v| v.as_str()) {
-            cfg.locale = v.to_string();
+            // Invalid values fall back to "system" rather than being stored as-is.
+            cfg.locale = state::normalize_locale(v).to_string();
+            env_changed = true;
         }
         if let Some(v) = obj.get("theme").and_then(|v| v.as_str()) {
-            cfg.theme = v.to_string();
+            cfg.theme = state::normalize_theme(v).to_string();
+            env_changed = true;
         }
         if let Some(v) = obj.get("ballSide").and_then(|v| v.as_str()) {
             cfg.ball_side = v.to_string();
@@ -357,8 +376,17 @@ pub fn save_config(window: WebviewWindow, patch: Value) -> Result<Value, String>
     }
     state::save_config(&cfg)?;
     windows::ball::reposition(&app);
+    // Theme and locale are process-wide (one WebView2 profile); push them to every
+    // open webview now instead of waiting for the next window creation. The native
+    // side re-selects its word list and rebuilds the tray menu in the same step.
+    let touched = if env_changed {
+        crate::apply_locale(&app);
+        env::apply_all(&app)
+    } else {
+        0
+    };
     let _ = app.emit_all_hosts("config-changed", json!({}));
-    Ok(json!({ "ok": true }))
+    Ok(json!({ "ok": true, "env": env::snapshot(), "windows": touched }))
 }
 
 // ------------------------------------------------------------------ misc

@@ -76,6 +76,20 @@ pub struct ManifestAction {
     pub accepts: Vec<String>,
 }
 
+/// Per-language metadata a tool can ship inside `tool.json`.
+///
+/// The base `name` / `description` / `actions[].title` stay the fallback: a
+/// language may translate any subset, and everything missing falls through to
+/// the base string (and from there to the tool id).
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LocalizedManifest {
+    pub name: String,
+    pub description: String,
+    /// action id -> translated title
+    pub actions: BTreeMap<String, String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub struct Manifest {
@@ -93,6 +107,8 @@ pub struct Manifest {
     pub permissions: Permissions,
     pub actions: Vec<ManifestAction>,
     pub accepts: Vec<String>,
+    /// BCP-47 tag -> translated metadata (`tool.json` `locales` object).
+    pub locales: BTreeMap<String, LocalizedManifest>,
     /// "official" | "installed" | "dev" - filled in by the scanner.
     pub source: String,
     /// Absolute directory of the tool.
@@ -123,10 +139,96 @@ impl Default for Manifest {
             permissions: Permissions::default(),
             actions: Vec::new(),
             accepts: Vec::new(),
+            locales: BTreeMap::new(),
             source: String::new(),
             dir: String::new(),
             error: String::new(),
         }
+    }
+}
+
+impl Manifest {
+    /// Pick the entry for `locale` from a per-language map.
+    ///
+    /// Matching chain: exact tag (`en-US`) → language prefix (`en`, also matches
+    /// `en-GB` when only `en-US` is shipped) → nothing (caller falls back to the
+    /// base string).
+    fn localized<'a>(&'a self, locale: &str) -> Option<&'a LocalizedManifest> {
+        if let Some(exact) = self.locales.get(locale) {
+            return Some(exact);
+        }
+        let wanted = locale.to_ascii_lowercase();
+        if let Some((_, hit)) = self
+            .locales
+            .iter()
+            .find(|(tag, _)| tag.to_ascii_lowercase() == wanted)
+        {
+            return Some(hit);
+        }
+        let prefix = wanted.split('-').next().unwrap_or(&wanted).to_string();
+        self.locales
+            .iter()
+            .find(|(tag, _)| {
+                let tag = tag.to_ascii_lowercase();
+                tag == prefix || tag.starts_with(&format!("{prefix}-"))
+            })
+            .map(|(_, hit)| hit)
+    }
+
+    /// Display name in `locale`, falling back to the base name.
+    pub fn name_for(&self, locale: &str) -> String {
+        self.localized(locale)
+            .map(|l| l.name.trim())
+            .filter(|n| !n.is_empty())
+            .map(|n| n.to_string())
+            .unwrap_or_else(|| self.name.clone())
+    }
+
+    /// Description in `locale`, falling back to the base description.
+    pub fn description_for(&self, locale: &str) -> String {
+        self.localized(locale)
+            .map(|l| l.description.trim())
+            .filter(|d| !d.is_empty())
+            .map(|d| d.to_string())
+            .unwrap_or_else(|| self.description.clone())
+    }
+
+    /// Action title in `locale`, falling back to the base title.
+    pub fn action_title_for(&self, action: &ManifestAction, locale: &str) -> String {
+        self.localized(locale)
+            .and_then(|l| l.actions.get(&action.id))
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .map(|t| t.to_string())
+            .unwrap_or_else(|| action.title.clone())
+    }
+
+    /// Everything searchable about the tool, in **every** shipped language.
+    ///
+    /// The panel matches against this so typing `对齐` or `align` both find
+    /// sprite-align, without the panel having to know about manifests.
+    pub fn search_text(&self) -> String {
+        let mut parts: Vec<String> = Vec::new();
+        parts.push(self.name.clone());
+        parts.push(self.id.clone());
+        parts.push(self.description.clone());
+        for action in &self.actions {
+            parts.push(action.title.clone());
+            parts.push(action.id.clone());
+        }
+        for localized in self.locales.values() {
+            parts.push(localized.name.clone());
+            parts.push(localized.description.clone());
+            for title in localized.actions.values() {
+                parts.push(title.clone());
+            }
+        }
+        parts
+            .into_iter()
+            .map(|p| p.trim().to_string())
+            .filter(|p| !p.is_empty())
+            .collect::<Vec<_>>()
+            .join(" ")
     }
 }
 
@@ -139,52 +241,66 @@ fn read_manifest(dir: &Path, source: &str) -> Option<Manifest> {
     m.source = source.to_string();
     m.dir = dir.to_string_lossy().to_string();
 
-    // --- validation -------------------------------------------------------
+    let problems = validate_fields(&mut m, dir, &dir_name);
+    if problems.is_empty() {
+        m.error.clear();
+    } else {
+        m.error = problems.join(&rust_i18n::t!("native.registry.join"));
+    }
+    Some(m)
+}
+
+/// Field-level validation, split from the file IO so it can be unit tested.
+fn validate_fields(m: &mut Manifest, dir: &Path, dir_name: &str) -> Vec<String> {
     let mut problems: Vec<String> = Vec::new();
     if m.id.is_empty() {
-        m.id = dir_name.clone();
+        m.id = dir_name.to_string();
     }
     if m.id != dir_name {
-        problems.push(format!("清单 id「{}」与目录名「{}」不一致", m.id, dir_name));
+        problems.push(
+            rust_i18n::t!("native.registry.id_mismatch", id = m.id.as_str(), dir = dir_name)
+                .to_string(),
+        );
     }
     if !m
         .id
         .chars()
         .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
     {
-        problems.push("id 只能包含小写字母、数字、- 和 _".into());
+        problems.push(rust_i18n::t!("native.registry.bad_id").to_string());
     }
     if m.name.trim().is_empty() {
-        problems.push("缺少 name".into());
+        problems.push(rust_i18n::t!("native.registry.missing_name").to_string());
     }
     if m.manifest_version > 1 {
-        problems.push(format!(
-            "清单版本 {} 高于本工具箱支持的 1",
-            m.manifest_version
-        ));
+        problems.push(
+            rust_i18n::t!(
+                "native.registry.manifest_version",
+                version = m.manifest_version
+            )
+            .to_string(),
+        );
     }
-    if m.bridge_version > 1 {
-        problems.push(format!(
-            "需要 Bridge v{}，本工具箱仅支持 v1",
-            m.bridge_version
-        ));
+    // Bridge v1 and v2 are both loadable; the v2 shim stays backwards compatible
+    // with v1 tools, so anything newer is the only hard rejection.
+    if m.bridge_version > 2 {
+        problems.push(
+            rust_i18n::t!("native.registry.bridge_version", version = m.bridge_version).to_string(),
+        );
     }
     let entry_path = dir.join(&m.entry);
     if !entry_path.is_file() {
-        problems.push(format!("入口文件不存在：{}", m.entry));
+        problems.push(
+            rust_i18n::t!("native.registry.entry_missing", entry = m.entry.as_str()).to_string(),
+        );
     }
     // entry must stay inside the tool directory
     if let Some(parent) = entry_path.parent() {
         if paths::ensure_inside(dir, parent).is_none() && entry_path.exists() {
-            problems.push("入口路径越界".into());
+            problems.push(rust_i18n::t!("native.registry.entry_escape").to_string());
         }
     }
-    if problems.is_empty() {
-        m.error.clear();
-    } else {
-        m.error = problems.join("；");
-    }
-    Some(m)
+    problems
 }
 
 fn scan_dir(base: &Path, source: &str, out: &mut Vec<Manifest>) {
@@ -467,5 +583,115 @@ mod tests {
         assert_eq!(effective.network, ["a.example.com"]);
         assert!(granted.any());
         assert!(!Permissions::default().any());
+    }
+
+    fn localized_manifest() -> Manifest {
+        let mut m = Manifest {
+            id: "sprite-align".into(),
+            name: "序列帧对齐".into(),
+            description: "切分 sprite sheet".into(),
+            actions: vec![
+                ManifestAction {
+                    id: "open".into(),
+                    title: "打开序列帧对齐".into(),
+                    ..Default::default()
+                },
+                ManifestAction {
+                    id: "export-zip".into(),
+                    title: "导出为 ZIP".into(),
+                    ..Default::default()
+                },
+            ],
+            ..Default::default()
+        };
+        let mut en = LocalizedManifest {
+            name: "Sprite Align".into(),
+            description: "Slice sprite sheets".into(),
+            ..Default::default()
+        };
+        en.actions.insert("open".into(), "Open Sprite Align".into());
+        m.locales.insert("en-US".into(), en);
+
+        let mut zh_tw = LocalizedManifest {
+            name: "序列影格對齊".into(),
+            ..Default::default()
+        };
+        zh_tw.actions.insert("export-zip".into(), "匯出為 ZIP".into());
+        m.locales.insert("zh-TW".into(), zh_tw);
+        m
+    }
+
+    #[test]
+    fn localized_metadata_prefers_exact_then_prefix_then_base() {
+        let m = localized_manifest();
+        // exact tag
+        assert_eq!(m.name_for("en-US"), "Sprite Align");
+        assert_eq!(m.description_for("en-US"), "Slice sprite sheets");
+        assert_eq!(m.action_title_for(&m.actions[0], "en-US"), "Open Sprite Align");
+        // language prefix: en-GB has no entry, en-US matches on `en`
+        assert_eq!(m.name_for("en-GB"), "Sprite Align");
+        // zh-TW exists, zh-CN does not -> prefix `zh` picks zh-TW
+        assert_eq!(m.name_for("zh-TW"), "序列影格對齊");
+        assert_eq!(m.name_for("zh-CN"), "序列影格對齊");
+        // action absent from the localised block falls back to the base title
+        assert_eq!(
+            m.action_title_for(&m.actions[1], "en-US"),
+            "导出为 ZIP",
+            "a partially translated tool keeps the base action title"
+        );
+        // completely unknown language -> base strings
+        assert_eq!(m.name_for("de-DE"), "序列帧对齐");
+        assert_eq!(m.description_for("de-DE"), "切分 sprite sheet");
+    }
+
+    #[test]
+    fn search_text_covers_every_shipped_language() {
+        let m = localized_manifest();
+        let text = m.search_text();
+        for needle in [
+            "序列帧对齐",
+            "Sprite Align",
+            "序列影格對齊",
+            "Slice sprite sheets",
+            "Open Sprite Align",
+            "导出为 ZIP",
+            "匯出為 ZIP",
+            "open",
+            "export-zip",
+        ] {
+            assert!(text.contains(needle), "search text is missing {needle:?}: {text}");
+        }
+    }
+
+    #[test]
+    fn bridge_versions_one_and_two_load_and_later_ones_are_rejected() {
+        let dir = std::path::Path::new(".");
+        for version in [1u32, 2] {
+            let mut m = Manifest {
+                id: "sprite-align".into(),
+                name: "x".into(),
+                bridge_version: version,
+                entry: "Cargo.toml".into(), // exists in the crate root, keeps the entry check quiet
+                ..Default::default()
+            };
+            let problems = validate_fields(&mut m, dir, "sprite-align");
+            assert!(
+                !problems.iter().any(|p| p.contains("Bridge")),
+                "bridge v{version} must load: {problems:?}"
+            );
+        }
+
+        let mut m = Manifest {
+            id: "sprite-align".into(),
+            name: "x".into(),
+            bridge_version: 3,
+            entry: "Cargo.toml".into(),
+            ..Default::default()
+        };
+        let problems = validate_fields(&mut m, dir, "sprite-align");
+        assert!(
+            problems.iter().any(|p| p.contains("Bridge")),
+            "bridge v3 must be rejected: {problems:?}"
+        );
     }
 }
